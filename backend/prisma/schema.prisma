@@ -9,17 +9,31 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  avatarUrl String?
-  role      String   @default("student")
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id              String   @id @default(cuid())
+  email           String   @unique
+  name            String?
+  avatarUrl       String?
+  role            String   @default("student")
+  isActive        Boolean  @default(true)
+  career          String?
+  currentSemester Int?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   identities AuthIdentity[]
   sessions   Session[]
+  subjects   Subject[]      @relation("StudentSubjects")
+}
+
+model Subject {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  code      String?  @unique
+  credits   Int?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  students  User[]   @relation("StudentSubjects")
 }
 
 model AuthIdentity {
