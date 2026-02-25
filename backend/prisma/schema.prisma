@@ -20,9 +20,11 @@ model User {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  identities AuthIdentity[]
-  sessions   Session[]
-  subjects   Subject[]      @relation("StudentSubjects")
+  identities     AuthIdentity[]
+  sessions       Session[]
+  subjects       Subject[]      @relation("StudentSubjects")
+  ownedGroups    StudyGroup[]   @relation("GroupOwner")
+  memberOfGroups StudyGroup[]   @relation("GroupMembers")
 }
 
 model Subject {
@@ -64,4 +66,16 @@ model Session {
 
   @@index([userId, revokedAt])
   @@index([expiresAt])
+}
+
+model StudyGroup {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  ownerId     String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  owner   User   @relation("GroupOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  members User[] @relation("GroupMembers")
 }

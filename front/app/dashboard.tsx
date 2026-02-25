@@ -104,6 +104,10 @@ export default function DashboardScreen() {
         )}
       </View>
 
+      <Pressable style={styles.actionButton} onPress={() => router.push('/study-groups')}>
+        <Text style={styles.actionButtonLabel}>Mis Grupos de Estudio</Text>
+      </Pressable>
+
       <Pressable style={styles.logoutButton} disabled={isLoggingOut} onPress={handleLogout}>
         <Text style={styles.logoutLabel}>{isLoggingOut ? 'Cerrando...' : 'Cerrar sesión'}</Text>
       </Pressable>
@@ -215,5 +219,19 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#475569',
     fontWeight: '500',
+  },
+  actionButton: {
+    marginTop: 6,
+    backgroundColor: '#eff6ff',
+    borderRadius: 12,
+    paddingVertical: 13,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+  },
+  actionButtonLabel: {
+    color: '#1d4ed8',
+    textAlign: 'center',
+    fontWeight: '700',
+    fontSize: 15,
   },
 });

@@ -5,6 +5,7 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import { authRouter } from './modules/auth/auth.routes.js';
 import { studentRouter } from './modules/student/student.routes.js';
+import { studyGroupRouter } from './modules/study-group/study-group.routes.js';
 import { env } from './config/env.js';
 import { checkDbConnection, prisma } from './lib/prisma.js';
 
@@ -39,6 +40,7 @@ app.get('/health/db', async (_req, res) => {
 
 app.use('/auth', authRouter);
 app.use('/student', studentRouter);
+app.use('/groups', studyGroupRouter);
 
 app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
   if (err instanceof Error) {

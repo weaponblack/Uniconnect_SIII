@@ -100,3 +100,27 @@ export async function getAllSubjects() {
         orderBy: { name: 'asc' },
     });
 }
+
+export async function searchStudentsByName(query: string) {
+    if (!query || query.trim().length === 0) {
+        return [];
+    }
+
+    return prisma.user.findMany({
+        where: {
+            name: {
+                contains: query,
+                mode: 'insensitive'
+            }
+        },
+        select: {
+            id: true,
+            name: true,
+            email: true,
+            career: true,
+            currentSemester: true,
+            avatarUrl: true
+        },
+        take: 10
+    });
+}

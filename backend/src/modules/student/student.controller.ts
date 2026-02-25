@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from 'express';
-import { getStudentProfile, updateStudentProfile, getAllSubjects } from './student.service.js';
+import { getStudentProfile, updateStudentProfile, getAllSubjects, searchStudentsByName } from './student.service.js';
 import { updateProfileSchema } from './student.schemas.js';
 
 export async function getProfileHandler(req: Request, res: Response, next: NextFunction) {
@@ -30,6 +30,16 @@ export async function getSubjectsHandler(req: Request, res: Response, next: Next
     try {
         const subjects = await getAllSubjects();
         res.json(subjects);
+    } catch (error) {
+        next(error);
+    }
+}
+
+export async function searchStudentsHandler(req: Request, res: Response, next: NextFunction) {
+    try {
+        const query = req.query.name as string;
+        const students = await searchStudentsByName(query);
+        res.json(students);
     } catch (error) {
         next(error);
     }

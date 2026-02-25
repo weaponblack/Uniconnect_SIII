@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getProfileHandler, updateProfileHandler, getSubjectsHandler } from './student.controller.js';
+import { getProfileHandler, updateProfileHandler, getSubjectsHandler, searchStudentsHandler } from './student.controller.js';
 import { requireAuth } from '../auth/auth.middleware.js';
 
 export const studentRouter = Router();
@@ -10,3 +10,4 @@ studentRouter.use(requireAuth);
 studentRouter.get('/profile', getProfileHandler);
 studentRouter.put('/profile', updateProfileHandler);
 studentRouter.get('/subjects', getSubjectsHandler);
+studentRouter.get('/search', searchStudentsHandler);
