@@ -24,6 +24,16 @@ export async function signInWithGoogleIdToken(idToken: string): Promise<SessionD
   return parseOrThrow(response) as Promise<SessionData>;
 }
 
+export async function signInSimple(email: string, name: string): Promise<SessionData> {
+  const response = await fetch(`${authConfig.backendUrl}/auth/simple`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, name }),
+  });
+
+  return parseOrThrow(response) as Promise<SessionData>;
+}
+
 export async function logoutWithRefreshToken(refreshToken: string): Promise<void> {
   const response = await fetch(`${authConfig.backendUrl}/auth/logout`, {
     method: 'POST',
