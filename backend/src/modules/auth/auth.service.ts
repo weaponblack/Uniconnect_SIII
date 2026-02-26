@@ -222,6 +222,57 @@ export async function refreshSession(refreshToken: string, device: DeviceContext
   };
 }
 
+export async function signInSimple(email: string, name: string, device: DeviceContext) {
+  // Find or create user
+  const existingUser = await prisma.user.findUnique({
+    where: { email },
+  });
+
+  let user;
+  if (existingUser) {
+    // Update existing user with new name if provided
+    user = await prisma.user.update({
+      where: { id: existingUser.id },
+      data: {
+        name: name || existingUser.name,
+      },
+    });
+  } else {
+    // Create new user
+    user = await prisma.user.create({
+      data: {
+        email,
+        name: name || null,
+      },
+    });
+  }
+
+  const refreshData = buildRefreshToken();
+  const expiresAt = new Date(Date.now() + env.REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000);
+
+  const session = await prisma.session.create({
+    data: {
+      userId: user.id,
+      refreshTokenHash: refreshData.hash,
+      userAgent: device.userAgent,
+      ip: device.ip,
+      expiresAt,
+    },
+  });
+
+  return {
+    accessToken: createAccessToken({ sub: user.id, email: user.email, role: user.role }),
+    refreshToken: `${session.id}.${refreshData.tokenPart}`,
+    user: {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      avatarUrl: user.avatarUrl,
+      role: user.role,
+    },
+  };
+}
+
 export async function logout(refreshToken: string): Promise<void> {
   const [sessionId] = refreshToken.split('.');
   if (!sessionId) {

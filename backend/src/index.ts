@@ -60,8 +60,10 @@ async function bootstrap() {
     isDatabaseConnected = true;
     console.log('Database connection: OK');
 
-    app.listen(port, () => {
-      console.log(`API running on http://localhost:${port}`);
+    // bind to all network interfaces so that other devices on the LAN can reach us
+    app.listen(port, '0.0.0.0', () => {
+      console.log(`API running on http://0.0.0.0:${port}`);
+      console.log(`API accessible on local network at http://<this-machine-ip>:${port}`);
     });
   } catch (error) {
     isDatabaseConnected = false;

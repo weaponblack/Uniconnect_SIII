@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
-import { googleAuthSchema, refreshSchema } from './auth.schemas.js';
-import { logout, refreshSession, signInWithGoogle } from './auth.service.js';
+import { googleAuthSchema, simpleAuthSchema, refreshSchema } from './auth.schemas.js';
+import { logout, refreshSession, signInWithGoogle, signInSimple } from './auth.service.js';
 import { AppError } from '../../errors/app-error.js';
 
 function getDeviceContext(req: Request): { ip?: string; userAgent?: string } {
@@ -77,5 +77,28 @@ export async function logoutHandler(req: Request, res: Response) {
       return res.status(error.statusCode).json({ message: error.message });
     }
     return res.status(400).json({ message: 'Logout failed' });
+  }
+}
+
+export async function simpleSignInHandler(req: Request, res: Response) {
+  const parsed = simpleAuthSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({
+      message: 'Invalid body',
+      errors: parsed.error.flatten().fieldErrors,
+    });
+  }
+
+  try {
+    const authData = await signInSimple(parsed.data.email, parsed.data.name, getDeviceContext(req));
+    return res.status(200).json(authData);
+  } catch (error) {
+    if (error instanceof AppError) {
+      return res.status(error.statusCode).json({ message: error.message });
+    }
+    if (error instanceof Error) {
+      return res.status(400).json({ message: error.message });
+    }
+    return res.status(400).json({ message: 'Authentication failed' });
   }
 }
