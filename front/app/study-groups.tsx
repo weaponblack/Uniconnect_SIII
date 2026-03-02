@@ -1,13 +1,15 @@
 import { useEffect, useState, useCallback } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View, Modal, FlatList } from 'react-native';
-import { router, useFocusEffect } from 'expo-router';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View, Modal, Alert, Platform } from 'react-native';
+import { Stack, router, useFocusEffect } from 'expo-router';
 import { loadSession, type SessionData } from '@/lib/session';
 import {
     getStudentStudyGroups,
     createStudyGroup,
     updateStudyGroup,
     addMembersToStudyGroup,
+    removeMemberFromStudyGroup,
     searchStudentsByName,
+    deleteStudyGroup,
     type StudyGroup,
     type StudyGroupMember
 } from '@/lib/study-group-api';
@@ -28,6 +30,8 @@ export default function StudyGroupsScreen() {
     const [searchResults, setSearchResults] = useState<StudyGroupMember[]>([]);
     const [isSearching, setIsSearching] = useState(false);
     const [isAddingMember, setIsAddingMember] = useState(false);
+    const [isRemovingMember, setIsRemovingMember] = useState<string | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     useFocusEffect(
         useCallback(() => {
@@ -111,9 +115,86 @@ export default function StudyGroupsScreen() {
         }
     };
 
+    const handleRemoveMember = async (memberId: string, memberName: string) => {
+        if (!editingGroup) return;
+
+        const performRemove = async () => {
+            try {
+                setIsRemovingMember(memberId);
+                const updatedGroup = await removeMemberFromStudyGroup(editingGroup.id, memberId);
+                setEditingGroup(updatedGroup);
+                setGroups(groups.map(g => (g.id === updatedGroup.id ? updatedGroup : g)));
+                if (Platform.OS === 'web') {
+                    window.alert('Miembro eliminado.');
+                } else {
+                    Alert.alert('Éxito', 'Miembro eliminado.');
+                }
+            } catch (error) {
+                console.error('Remove member error', error);
+                Alert.alert('Error', 'No se pudo eliminar al miembro.');
+            } finally {
+                setIsRemovingMember(null);
+            }
+        };
+
+        if (Platform.OS === 'web') {
+            if (window.confirm(`¿Seguro que deseas eliminar a ${memberName} del grupo?`)) {
+                void performRemove();
+            }
+        } else {
+            Alert.alert(
+                'Eliminar miembro',
+                `¿Seguro que deseas eliminar a ${memberName} del grupo?`,
+                [
+                    { text: 'Cancelar', style: 'cancel' },
+                    { text: 'Eliminar', style: 'destructive', onPress: () => void performRemove() },
+                ]
+            );
+        }
+    };
+
+    const handleDeleteGroup = async () => {
+        if (!editingGroup) return;
+
+        const performDelete = async () => {
+            try {
+                setIsDeleting(true);
+                await deleteStudyGroup(editingGroup.id);
+                setGroups(groups.filter(g => g.id !== editingGroup.id));
+                setEditingGroup(null);
+                if (Platform.OS === 'web') {
+                    window.alert('El grupo ha sido eliminado con éxito.');
+                } else {
+                    Alert.alert('Éxito', 'El grupo ha sido eliminado.');
+                }
+            } catch (error) {
+                console.error('Delete group error', error);
+                Alert.alert('Error', 'No se pudo eliminar el grupo.');
+            } finally {
+                setIsDeleting(false);
+            }
+        };
+
+        if (Platform.OS === 'web') {
+            if (window.confirm(`¿Estás seguro de que deseas eliminar el grupo "${editingGroup.name}"? Esta acción no se puede deshacer.`)) {
+                void performDelete();
+            }
+        } else {
+            Alert.alert(
+                'Eliminar Grupo',
+                `¿Estás seguro de que deseas eliminar el grupo "${editingGroup.name}"? Esta acción no se puede deshacer.`,
+                [
+                    { text: 'Cancelar', style: 'cancel' },
+                    { text: 'Eliminar', style: 'destructive', onPress: () => void performDelete() },
+                ]
+            );
+        }
+    };
+
     if (isLoading || !session) {
         return (
             <View style={styles.loaderContainer}>
+                <Stack.Screen options={{ title: 'Grupos de Estudio' }} />
                 <ActivityIndicator />
                 <Text style={styles.loaderText}>Cargando grupos...</Text>
             </View>
@@ -124,24 +205,42 @@ export default function StudyGroupsScreen() {
         // Edit mode UI
         return (
             <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+                <Stack.Screen options={{ title: 'Gestionar Grupo' }} />
                 <Pressable onPress={() => { setEditingGroup(null); setSearchQuery(''); setSearchResults([]); }} style={styles.backButton}>
                     <Text style={styles.backButtonText}>← Volver a mis grupos</Text>
                 </Pressable>
 
-                <Text style={styles.title}>Gestionar: {editingGroup.name}</Text>
+                <Text style={styles.title}>{editingGroup.name}</Text>
                 <Text style={styles.subtitle}>{editingGroup.description || 'Sin descripción'}</Text>
 
                 <View style={styles.card}>
                     <Text style={styles.cardTitle}>Miembros actuales ({editingGroup.members.length})</Text>
-                    {editingGroup.members.map((member) => (
-                        <View key={member.id} style={styles.memberItem}>
-                            <Text style={styles.memberName}>{member.name || member.email}</Text>
-                            <Text style={styles.memberCareer}>{member.career || 'Sin carrera'} • Semestre {member.currentSemester || '?'}</Text>
-                            {member.id === editingGroup.ownerId ? (
-                                <View style={styles.ownerBadge}><Text style={styles.ownerBadgeText}>Propietario</Text></View>
-                            ) : null}
-                        </View>
-                    ))}
+                    {editingGroup.members.map((member) => {
+                        const isOwner = member.id === editingGroup.ownerId;
+                        const canRemove = session.user.id === editingGroup.ownerId && !isOwner;
+                        const isRemovingThis = isRemovingMember === member.id;
+
+                        return (
+                            <View key={member.id} style={styles.memberItem}>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={styles.memberName}>{member.name || member.email}</Text>
+                                    <Text style={styles.memberCareer}>{member.career || 'Sin carrera'} • Semestre {member.currentSemester || '?'}</Text>
+                                    {isOwner ? (
+                                        <View style={styles.ownerBadge}><Text style={styles.ownerBadgeText}>Propietario</Text></View>
+                                    ) : null}
+                                </View>
+                                {canRemove && (
+                                    <Pressable
+                                        style={[styles.removeMemberButton, isRemovingThis && { opacity: 0.5 }]}
+                                        onPress={() => handleRemoveMember(member.id, member.name || member.email)}
+                                        disabled={isRemovingThis}
+                                    >
+                                        <Text style={styles.removeMemberText}>{isRemovingThis ? '...' : 'Expulsar'}</Text>
+                                    </Pressable>
+                                )}
+                            </View>
+                        );
+                    })}
                 </View>
 
                 {session.user.id === editingGroup.ownerId && (
@@ -185,6 +284,18 @@ export default function StudyGroupsScreen() {
                         )}
                     </View>
                 )}
+
+                {session.user.id === editingGroup.ownerId && (
+                    <Pressable
+                        style={[styles.deleteButton, isDeleting && { opacity: 0.6 }]}
+                        onPress={handleDeleteGroup}
+                        disabled={isDeleting}
+                    >
+                        <Text style={styles.deleteButtonText}>
+                            {isDeleting ? 'Eliminando...' : 'Eliminar Grupo'}
+                        </Text>
+                    </Pressable>
+                )}
             </ScrollView>
         );
     }
@@ -192,6 +303,7 @@ export default function StudyGroupsScreen() {
     // List mode UI
     return (
         <View style={styles.container}>
+            <Stack.Screen options={{ title: 'Grupos de Estudio' }} />
             <View style={styles.header}>
                 <Pressable onPress={() => router.back()} style={styles.backButtonOnly}>
                     <Text style={styles.backButtonText}>← Atrás</Text>
@@ -218,7 +330,6 @@ export default function StudyGroupsScreen() {
                                 </View>
                                 <Text style={styles.groupDesc}>{group.description || 'Sin descripción'}</Text>
                                 <Text style={styles.groupMembersCount}>{group.members.length} miembros</Text>
-
                                 <Pressable
                                     style={styles.manageButton}
                                     onPress={() => setEditingGroup(group)}
@@ -233,7 +344,7 @@ export default function StudyGroupsScreen() {
 
             <View style={styles.fabContainer}>
                 <Pressable style={styles.fab} onPress={() => setCreateModalVisible(true)}>
-                    <Text style={styles.fabText}>+ Crear Grupo</Text>
+                    <Text style={styles.fabText}>Crear Grupo</Text>
                 </Pressable>
             </View>
 
@@ -329,7 +440,7 @@ const styles = StyleSheet.create({
         marginBottom: 8,
     },
     backButtonText: {
-        color: '#2563eb',
+        color: '#003e70',
         fontWeight: '600',
         fontSize: 15,
     },
@@ -392,6 +503,7 @@ const styles = StyleSheet.create({
         paddingVertical: 4,
         borderRadius: 6,
         marginLeft: 8,
+        width: 80,
     },
     ownerBadgeText: {
         color: '#1d4ed8',
@@ -416,11 +528,11 @@ const styles = StyleSheet.create({
         right: 20,
     },
     fab: {
-        backgroundColor: '#2563eb',
+        backgroundColor: '#003e70',
         borderRadius: 12,
         paddingVertical: 16,
         alignItems: 'center',
-        shadowColor: '#2563eb',
+        shadowColor: '#003e70',
         shadowOpacity: 0.3,
         shadowRadius: 8,
         shadowOffset: { width: 0, height: 4 },
@@ -580,5 +692,30 @@ const styles = StyleSheet.create({
         color: '#64748b',
         fontStyle: 'italic',
         marginTop: 8,
+    },
+    deleteButton: {
+        backgroundColor: '#dc4141ff',
+        paddingVertical: 14,
+        borderRadius: 12,
+        alignItems: 'center',
+        marginTop: 16,
+        marginBottom: 24,
+    },
+    deleteButtonText: {
+        color: '#ffffff',
+        fontWeight: '700',
+        fontSize: 16,
+    },
+    removeMemberButton: {
+        backgroundColor: '#fee2e2',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 6,
+        marginLeft: 10,
+    },
+    removeMemberText: {
+        color: '#ef4444',
+        fontWeight: '600',
+        fontSize: 12,
     },
 });

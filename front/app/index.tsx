@@ -1,10 +1,13 @@
 import { Link } from 'expo-router';
-import { StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, Text, View } from 'react-native';
 
 export default function LandingScreen() {
   return (
     <View style={styles.container}>
-      <Text style={styles.badge}>UNICONNECT</Text>
+      <View style={styles.logoContainer}>
+        <Image source={require('../assets/images/LogoUC.png')} style={styles.logo} />
+        <Text style={styles.logoText}>UniConnect</Text>
+      </View>
       <Text style={styles.title}>Conecta con tu campus</Text>
       <Text style={styles.subtitle}>
         Red universitaria para conocer estudiantes, compartir recursos y colaborar en proyectos.
@@ -25,24 +28,31 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     paddingHorizontal: 24,
-    backgroundColor: '#f6f8fb',
+    backgroundColor: '#f3f3f3ff',
   },
-  badge: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#1f2937',
-    color: '#ffffff',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    fontSize: 12,
-    fontWeight: '700',
+  logoContainer: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    alignSelf: 'center',
+    marginBottom: 24,
+  },
+  logo: {
+    width: 96,
+    height: 96,
     marginBottom: 16,
+    borderRadius: 16,
+  },
+  logoText: {
+    fontSize: 50,
+    fontWeight: '800',
+    color: '#003e70',
   },
   title: {
     fontSize: 34,
     lineHeight: 40,
     fontWeight: '800',
     color: '#101828',
+    textAlign: 'center',
   },
   subtitle: {
     marginTop: 12,
@@ -50,9 +60,10 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     color: '#475467',
     marginBottom: 28,
+    textAlign: 'center',
   },
   primaryButton: {
-    backgroundColor: '#1d4ed8',
+    backgroundColor: '#003e70',
     color: '#ffffff',
     textAlign: 'center',
     paddingVertical: 14,
@@ -62,8 +73,8 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   secondaryButton: {
-    backgroundColor: '#e2e8f0',
-    color: '#0f172a',
+    backgroundColor: '#045389',
+    color: '#ffffff',
     textAlign: 'center',
     paddingVertical: 14,
     borderRadius: 12,

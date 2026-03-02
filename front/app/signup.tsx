@@ -3,7 +3,7 @@ import { router } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google.js';
 import { makeRedirectUri } from 'expo-auth-session';
-import { Alert, Platform, Pressable, StyleSheet, Text, View, TextInput, ScrollView } from 'react-native';
+import { Alert, Platform, Pressable, StyleSheet, Text, View, TextInput, ScrollView, Image } from 'react-native';
 import Constants from 'expo-constants';
 import { authConfig, validateAuthConfig } from '@/constants/AuthConfig';
 import { saveSession } from '@/lib/session';
@@ -14,10 +14,10 @@ WebBrowser.maybeCompleteAuthSession();
 export default function SignUpScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [statusText, setStatusText] = useState<string>('');
-  const [loginMethod, setLoginMethod] = useState<'google' | 'simple'>('simple');
+  const [loginMethod, setLoginMethod] = useState<'google' | 'simple' | null>(null);
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
-  
+
   const missingConfig = useMemo(
     () => validateAuthConfig(Platform.OS as 'web' | 'android' | 'ios'),
     []
@@ -161,10 +161,13 @@ export default function SignUpScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>Crear cuenta</Text>
+      <View style={styles.logoContainer}>
+        <Text style={styles.logoText}>UniConnect</Text>
+      </View>
+      <Text style={styles.title}>Iniciar Sesión</Text>
       <Text style={styles.subtitle}>Usa tu correo para acceder a UniConnect.</Text>
 
-      <View style={styles.methodSelector}>
+      <View style={[styles.methodSelector, !loginMethod && styles.methodSelectorColumn]}>
         <Pressable
           style={[
             styles.methodButton,
@@ -193,7 +196,7 @@ export default function SignUpScreen() {
         </Pressable>
       </View>
 
-      {loginMethod === 'simple' ? (
+      {loginMethod === 'simple' && (
         <View style={styles.formContainer}>
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Nombre completo</Text>
@@ -235,7 +238,9 @@ export default function SignUpScreen() {
             </Text>
           </Pressable>
         </View>
-      ) : (
+      )}
+
+      {loginMethod === 'google' && (
         <Pressable
           disabled={!request || isSubmitting}
           style={({ pressed }) => [
@@ -243,7 +248,10 @@ export default function SignUpScreen() {
             (pressed || isSubmitting || !request) && styles.googleButtonDisabled,
           ]}
           onPress={handleGoogleSignup}>
-          <Text style={styles.googleLogo}>G</Text>
+          <Image
+            source={{ uri: 'https://developers.google.com/identity/images/g-logo.png' }}
+            style={{ width: 24, height: 24 }}
+          />
           <Text style={styles.googleLabel}>
             {isSubmitting ? 'Validando...' : 'Sign up with Google'}
           </Text>
@@ -263,22 +271,44 @@ const styles = StyleSheet.create({
     paddingVertical: 40,
     backgroundColor: '#ffffff',
   },
+  logoContainer: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    alignSelf: 'center',
+    marginBottom: 24,
+  },
+  logo: {
+    width: 96,
+    height: 96,
+    marginBottom: 16,
+    borderRadius: 16,
+  },
+  logoText: {
+    fontSize: 50,
+    fontWeight: '800',
+    color: '#003e70',
+  },
   title: {
     fontSize: 30,
     fontWeight: '800',
     color: '#111827',
     marginBottom: 8,
+    textAlign: 'center',
   },
   subtitle: {
     marginBottom: 26,
     color: '#4b5563',
     fontSize: 15,
     lineHeight: 22,
+    textAlign: 'center',
   },
   methodSelector: {
     flexDirection: 'row',
     gap: 12,
     marginBottom: 24,
+  },
+  methodSelectorColumn: {
+    flexDirection: 'column',
   },
   methodButton: {
     flex: 1,
@@ -327,7 +357,7 @@ const styles = StyleSheet.create({
   submitButton: {
     borderRadius: 12,
     paddingVertical: 14,
-    backgroundColor: '#1d4ed8',
+    backgroundColor: '#045389',
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 8,

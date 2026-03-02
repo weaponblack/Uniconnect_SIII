@@ -166,7 +166,7 @@ const styles = StyleSheet.create({
   },
   logoutButton: {
     marginTop: 10,
-    backgroundColor: '#0f172a',
+    backgroundColor: '#045389',
     borderRadius: 12,
     paddingVertical: 13,
   },
@@ -222,14 +222,14 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     marginTop: 6,
-    backgroundColor: '#eff6ff',
+    backgroundColor: '#003e70',
     borderRadius: 12,
     paddingVertical: 13,
     borderWidth: 1,
     borderColor: '#bfdbfe',
   },
   actionButtonLabel: {
-    color: '#1d4ed8',
+    color: '#ffffff',
     textAlign: 'center',
     fontWeight: '700',
     fontSize: 15,

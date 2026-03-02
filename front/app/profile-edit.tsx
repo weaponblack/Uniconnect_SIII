@@ -186,7 +186,7 @@ const styles = StyleSheet.create({
         marginBottom: 12,
     },
     addButton: {
-        backgroundColor: '#2563eb',
+        backgroundColor: '#045389',
         justifyContent: 'center',
         paddingHorizontal: 16,
         borderRadius: 8,
@@ -234,7 +234,7 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
     },
     saveButton: {
-        backgroundColor: '#0f172a',
+        backgroundColor: '#003e70',
         paddingVertical: 14,
         borderRadius: 12,
         alignItems: 'center',
@@ -246,7 +246,7 @@ const styles = StyleSheet.create({
         fontWeight: '700',
     },
     cancelButton: {
-        backgroundColor: 'transparent',
+        backgroundColor: '#bcbcbcff',
         paddingVertical: 14,
         borderRadius: 12,
         alignItems: 'center',
@@ -254,7 +254,7 @@ const styles = StyleSheet.create({
         borderColor: '#e2e8f0',
     },
     cancelButtonLabel: {
-        color: '#475569',
+        color: '#ffffff',
         fontSize: 16,
         fontWeight: '600',
     },

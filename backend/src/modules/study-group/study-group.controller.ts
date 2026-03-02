@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from 'express';
-import { createStudyGroup, getStudentStudyGroups, updateStudyGroup, addMembersToGroup } from './study-group.service.js';
+import { createStudyGroup, getStudentStudyGroups, updateStudyGroup, addMembersToGroup, deleteStudyGroup, removeMemberFromGroup } from './study-group.service.js';
 import { createStudyGroupSchema, updateStudyGroupSchema, addMembersSchema } from './study-group.schemas.js';
 
 export async function createStudyGroupHandler(req: Request, res: Response, next: NextFunction) {
@@ -46,6 +46,31 @@ export async function addMembersToGroupHandler(req: Request, res: Response, next
         const data = addMembersSchema.parse(req.body);
 
         const updatedGroup = await addMembersToGroup(groupId, userId, data);
+        res.json(updatedGroup);
+    } catch (error) {
+        next(error);
+    }
+}
+
+export async function deleteStudyGroupHandler(req: Request, res: Response, next: NextFunction) {
+    try {
+        const userId = req.user!.sub;
+        const groupId = req.params.groupId;
+
+        await deleteStudyGroup(groupId, userId);
+        res.status(204).send();
+    } catch (error) {
+        next(error);
+    }
+}
+
+export async function removeMemberFromGroupHandler(req: Request, res: Response, next: NextFunction) {
+    try {
+        const userId = req.user!.sub;
+        const groupId = req.params.groupId;
+        const memberId = req.params.memberId;
+
+        const updatedGroup = await removeMemberFromGroup(groupId, userId, memberId);
         res.json(updatedGroup);
     } catch (error) {
         next(error);
