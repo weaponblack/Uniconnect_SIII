@@ -44,8 +44,16 @@ async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
     });
 
     if (!response.ok) {
-        const errorBody = await response.json().catch(() => ({}));
+        let errorBody = {};
+        try {
+            errorBody = await response.json();
+        } catch { }
+        // @ts-ignore
         throw new Error(errorBody.message || `Request failed with status ${response.status}`);
+    }
+
+    if (response.status === 204) {
+        return;
     }
 
     return response.json();
@@ -78,4 +86,16 @@ export async function addMembersToStudyGroup(groupId: string, memberIds: string[
 
 export async function searchStudentsByName(query: string): Promise<StudyGroupMember[]> {
     return fetchWithAuth(`/student/search?name=${encodeURIComponent(query)}`);
+}
+
+export async function deleteStudyGroup(groupId: string): Promise<void> {
+    return fetchWithAuth(`/groups/${groupId}`, {
+        method: 'DELETE',
+    });
+}
+
+export async function removeMemberFromStudyGroup(groupId: string, memberId: string): Promise<StudyGroup> {
+    return fetchWithAuth(`/groups/${groupId}/members/${memberId}`, {
+        method: 'DELETE',
+    });
 }

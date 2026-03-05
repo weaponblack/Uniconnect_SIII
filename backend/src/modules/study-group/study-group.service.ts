@@ -49,6 +49,17 @@ export async function updateStudyGroup(groupId: string, ownerId: string, data: U
     });
 }
 
+export async function deleteStudyGroup(groupId: string, ownerId: string) {
+    const group = await prisma.studyGroup.findUnique({ where: { id: groupId } });
+
+    if (!group) throw new AppError(404, 'Study group not found');
+    if (group.ownerId !== ownerId) throw new AppError(403, 'Only the owner can delete this group');
+
+    return prisma.studyGroup.delete({
+        where: { id: groupId }
+    });
+}
+
 export async function addMembersToGroup(groupId: string, ownerId: string, data: AddMembersInput) {
     const group = await prisma.studyGroup.findUnique({ where: { id: groupId } });
 
@@ -60,6 +71,27 @@ export async function addMembersToGroup(groupId: string, ownerId: string, data: 
         data: {
             members: {
                 connect: data.memberIds.map(id => ({ id }))
+            }
+        },
+        include: {
+            owner: { select: { id: true, name: true, email: true } },
+            members: { select: { id: true, name: true, email: true, career: true, currentSemester: true } },
+        }
+    });
+}
+
+export async function removeMemberFromGroup(groupId: string, ownerId: string, memberId: string) {
+    const group = await prisma.studyGroup.findUnique({ where: { id: groupId } });
+
+    if (!group) throw new AppError(404, 'Study group not found');
+    if (group.ownerId !== ownerId) throw new AppError(403, 'Only the owner can remove members');
+    if (ownerId === memberId) throw new AppError(400, 'Owner cannot be removed from their own group');
+
+    return prisma.studyGroup.update({
+        where: { id: groupId },
+        data: {
+            members: {
+                disconnect: { id: memberId }
             }
         },
         include: {

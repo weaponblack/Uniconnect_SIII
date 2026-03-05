@@ -3,7 +3,9 @@ import {
     createStudyGroupHandler,
     getStudentStudyGroupsHandler,
     updateStudyGroupHandler,
-    addMembersToGroupHandler
+    addMembersToGroupHandler,
+    deleteStudyGroupHandler,
+    removeMemberFromGroupHandler
 } from './study-group.controller.js';
 import { requireAuth } from '../auth/auth.middleware.js';
 
@@ -16,3 +18,5 @@ studyGroupRouter.post('/', createStudyGroupHandler);
 studyGroupRouter.get('/student/:studentId', getStudentStudyGroupsHandler);
 studyGroupRouter.put('/:groupId', updateStudyGroupHandler);
 studyGroupRouter.post('/:groupId/members', addMembersToGroupHandler);
+studyGroupRouter.delete('/:groupId/members/:memberId', removeMemberFromGroupHandler);
+studyGroupRouter.delete('/:groupId', deleteStudyGroupHandler);
