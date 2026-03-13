@@ -80,7 +80,7 @@ export default function DashboardScreen() {
 
         <Text style={styles.cardText}>Correo: {session.user.email}</Text>
         <Text style={styles.cardText}>Nombre: {session.user.name ?? 'Sin nombre'}</Text>
-        <Text style={styles.cardText}>Rol: {session.user.role}</Text>
+        <Text style={styles.cardText}>Rol: {session.user.role === 'student' ? 'Estudiante' : session.user.role === 'admin' ? 'Administrador' : session.user.role}</Text>
 
         {profile && (
           <View style={styles.extraProfileInfo}>

@@ -24,6 +24,7 @@ export default function StudyGroupsScreen() {
 
     // Edit state
     const [editingGroup, setEditingGroup] = useState<StudyGroup | null>(null);
+    const [showAllMembers, setShowAllMembers] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<StudyGroupMember[]>([]);
     const [isSearching, setIsSearching] = useState(false);
@@ -124,16 +125,16 @@ export default function StudyGroupsScreen() {
         // Edit mode UI
         return (
             <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-                <Pressable onPress={() => { setEditingGroup(null); setSearchQuery(''); setSearchResults([]); }} style={styles.backButton}>
+                <Pressable onPress={() => { setEditingGroup(null); setSearchQuery(''); setSearchResults([]); setShowAllMembers(false); }} style={styles.backButton}>
                     <Text style={styles.backButtonText}>← Volver a mis grupos</Text>
                 </Pressable>
 
                 <Text style={styles.title}>Gestionar: {editingGroup.name}</Text>
-                <Text style={styles.subtitle}>{editingGroup.description || 'Sin descripción'}</Text>
+                {!!editingGroup.description && <Text style={styles.subtitle}>{editingGroup.description}</Text>}
 
                 <View style={styles.card}>
                     <Text style={styles.cardTitle}>Miembros actuales ({editingGroup.members.length})</Text>
-                    {editingGroup.members.map((member) => (
+                    {(showAllMembers ? editingGroup.members : editingGroup.members.slice(0, 10)).map((member) => (
                         <View key={member.id} style={styles.memberItem}>
                             <Text style={styles.memberName}>{member.name || member.email}</Text>
                             <Text style={styles.memberCareer}>{member.career || 'Sin carrera'} • Semestre {member.currentSemester || '?'}</Text>
@@ -142,6 +143,11 @@ export default function StudyGroupsScreen() {
                             ) : null}
                         </View>
                     ))}
+                    {editingGroup.members.length > 10 && !showAllMembers && (
+                        <Pressable style={styles.viewMoreButton} onPress={() => setShowAllMembers(true)}>
+                            <Text style={styles.viewMoreText}>Ver {editingGroup.members.length - 10} más...</Text>
+                        </Pressable>
+                    )}
                 </View>
 
                 {session.user.id === editingGroup.ownerId && (
@@ -216,7 +222,7 @@ export default function StudyGroupsScreen() {
                                         </View>
                                     )}
                                 </View>
-                                <Text style={styles.groupDesc}>{group.description || 'Sin descripción'}</Text>
+                                {!!group.description && <Text style={styles.groupDesc}>{group.description}</Text>}
                                 <Text style={styles.groupMembersCount}>{group.members.length} miembros</Text>
 
                                 <Pressable
@@ -580,5 +586,17 @@ const styles = StyleSheet.create({
         color: '#64748b',
         fontStyle: 'italic',
         marginTop: 8,
+    },
+    viewMoreButton: {
+        paddingVertical: 12,
+        alignItems: 'center',
+        marginTop: 4,
+        backgroundColor: '#f8fafc',
+        borderRadius: 8,
+    },
+    viewMoreText: {
+        color: '#2563eb',
+        fontWeight: '600',
+        fontSize: 14,
     },
 });

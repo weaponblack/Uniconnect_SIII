@@ -1,7 +1,126 @@
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import { getStudentProfile, updateStudentProfile, type StudentProfile } from '@/lib/student-api';
+
+const CARRERAS = [
+    "Administración de empresas agropecuarias",
+    "Biología",
+    "Diseño visual",
+    "Enfermería",
+    "Historia",
+    "Ingeniería agronomica",
+    "Ingeniería de alimentos",
+    "Ingeniería de sistemas y computación",
+    "Ingeniería en informatica",
+    "Licenciatura en artes escénicas",
+    "Licenciatura en ciencias naturales",
+    "Licenciatura en ciencias sociales",
+    "Licenciatura en educación física",
+    "Licenciatura en filosofía",
+    "Licenciatura en lenguas modernas",
+    "Licenciatura en música",
+    "Maestro en artes plasticas",
+    "Maestro en música",
+    "Medicina",
+    "Medicina veterinaria y zootecnia",
+    "Administración financiera",
+    "Antropología",
+    "Desarrollo familiar",
+    "Derecho",
+    "Sociología",
+    "Trabajo social",
+    "Profesional en filosofía",
+    "Geología"
+];
+
+const MATERIAS_SISTEMAS = [
+    "Constitución Política De Colombia",
+    "Lógica Matemática",
+    "Opcionales",
+    "Matemáticas Discretas Ii",
+    "Matemáticas Fundamentales",
+    "Cálculo I",
+    "Cálculo Ii",
+    "Cálculo Iii",
+    "Matemáticas Especiales",
+    "Álgebra Lineal",
+    "Matemáticas Discretas",
+    "Probabilidad",
+    "Física Ii-Ing",
+    "Física I Ing",
+    "Física Iii Ing",
+    "Laboratorio De Física I Ing",
+    "Laboratorio De Física Ii Ing",
+    "Laboratorio Fisica I Ing",
+    "Laboratorio Fisica Ii Ing",
+    "Biologia Para Ingenieria",
+    "Programacion I",
+    "Programación Ii",
+    "Programacion Iii",
+    "Programación Concurrente Y Distribuida",
+    "Teoría General De Sistemas",
+    "Autómatas Y Lenguajes Formales",
+    "Estructura De Lenguajes",
+    "Sistemas Inteligentes I",
+    "Sistemas Inteligentes Ii",
+    "Análisis Y Diseño De Algoritmos",
+    "Investigación Para Ingeniería",
+    "Introducción A La Ingeniería De Sistemas Y Computación",
+    "Inglés Para Ingeniería",
+    "Automatización Y Control De Procesos",
+    "Sistemas Operativos",
+    "Comunicaciones De Datos",
+    "Redes De Computadores I",
+    "Redes De Computadores Iii",
+    "Redes De Computadores Ii",
+    "Ingeniería De Software I",
+    "Ingeniería De Software Ii",
+    "Ingeniería De Software Iii",
+    "Arquitectura De Computadores",
+    "Circuitos Digitales",
+    "Microprocesadores",
+    "Diseño De Interfaces",
+    "Practica",
+    "Seguridad Informática",
+    "Auditoría Informática",
+    "Proyecto Integrador",
+    "Gestión Tecnológica",
+    "Gestion De Proyectos",
+    "Bases De Datos I",
+    "Estructuras De Datos",
+    "Administración De Sistemas",
+    "Bases De Datos Ii",
+    "Ingeniería Del Conocimiento",
+    "Habilidades Gerenciales",
+    "Ingeniería Económica Y Financiera",
+    "Investigación De Mercados",
+    "Investigación De Operaciones",
+    "Implantación Y Aplicación De La Gestión Del Conocimiento",
+    "Framework Laravel Para Desarrollo Web",
+    "Framework Spring Para Desarrollo Web",
+    "Taller De Pruebas De Software",
+    "Desarrollo Avanzado Aplicaciones Web Con Asp.Net Mvc 5",
+    "Social Network Analysis",
+    "Habilidades Blandas Para Ingeniería De Sistemas Y Computación",
+    "Database Sql Expert",
+    "Taller De Sistemas Operativos",
+    "Modelado Computacional De Sistemas Físicos Y Biológicos",
+    "Programacion Para Dispositivos Moviles",
+    "Rotaciones En Sistemas Y Computacion",
+    "Procesamiento Digital De Imágenes",
+    "Inteligencia De Negocios",
+    "Vision Artificial En Tiempo Real",
+    "Web Semántica",
+    "Laboratorio De Soa",
+    "Industralización De Software",
+    "Emprendimiento Y Creacion De Empresas De Base Tecnologica",
+    "Calidad En El Desarrollo De Software",
+    "Arquitectura Empresarial",
+    "Fundamentos De Ingeniería Biomédica",
+    "Desarrollo De Videojuegos",
+    "Introducción A La Robótica"
+];
 
 export default function ProfileEditScreen() {
     const [profile, setProfile] = useState<StudentProfile | null>(null);
@@ -13,6 +132,22 @@ export default function ProfileEditScreen() {
     const [currentSemester, setCurrentSemester] = useState('');
     const [subjects, setSubjects] = useState<string[]>([]);
     const [newSubject, setNewSubject] = useState('');
+    const [showCarreras, setShowCarreras] = useState(false);
+    const [showSubjects, setShowSubjects] = useState(false);
+
+    const filteredCarreras = useMemo(() => {
+        if (!career) return CARRERAS;
+        const lower = career.toLowerCase();
+        return CARRERAS.filter(c => c.toLowerCase().includes(lower));
+    }, [career]);
+
+    const isSistemas = career.toLowerCase() === "ingeniería de sistemas y computación";
+
+    const filteredSubjects = useMemo(() => {
+        if (!isSistemas) return [];
+        const lower = newSubject.toLowerCase();
+        return MATERIAS_SISTEMAS.filter(s => s.toLowerCase().includes(lower) && !subjects.includes(s));
+    }, [newSubject, subjects, isSistemas]);
 
     useEffect(() => {
         async function fetchProfile() {
@@ -32,9 +167,23 @@ export default function ProfileEditScreen() {
     }, []);
 
     const handleAddSubject = () => {
-        if (newSubject.trim() && !subjects.includes(newSubject.trim())) {
-            setSubjects([...subjects, newSubject.trim()]);
-            setNewSubject('');
+        const trimmed = newSubject.trim();
+        if (!trimmed) return;
+
+        if (isSistemas) {
+            const match = MATERIAS_SISTEMAS.find(m => m.toLowerCase() === trimmed.toLowerCase());
+            if (match && !subjects.includes(match)) {
+                setSubjects([...subjects, match]);
+                setNewSubject('');
+                setShowSubjects(false);
+            } else {
+                Alert.alert('Materia no válida', 'Por favor selecciona una materia de la lista sugerida para tu carrera.');
+            }
+        } else {
+            if (!subjects.includes(trimmed)) {
+                setSubjects([...subjects, trimmed]);
+                setNewSubject('');
+            }
         }
     };
 
@@ -45,6 +194,11 @@ export default function ProfileEditScreen() {
     };
 
     const handleSave = async () => {
+        if (career.trim() && !CARRERAS.includes(career.trim())) {
+            Alert.alert('Error', 'Por favor selecciona una carrera sugerida de la lista.');
+            return;
+        }
+
         try {
             setIsSaving(true);
             await updateStudentProfile({
@@ -71,17 +225,50 @@ export default function ProfileEditScreen() {
     }
 
     return (
-        <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+        <ScrollView
+            style={styles.container}
+            contentContainerStyle={styles.contentContainer}
+            keyboardShouldPersistTaps="handled"
+        >
             <Text style={styles.title}>Editar Perfil</Text>
 
-            <Text style={styles.label}>Carrera</Text>
-            <TextInput
-                style={styles.input}
-                value={career}
-                onChangeText={setCareer}
-                placeholder="Ej: Ingeniería de Sistemas"
-                placeholderTextColor="#94a3b8"
-            />
+            <View style={{ zIndex: 10 }}>
+                <Text style={styles.label}>Carrera</Text>
+                <TextInput
+                    style={styles.input}
+                    value={career}
+                    onChangeText={(text) => {
+                        setCareer(text);
+                        setShowCarreras(true);
+                        // If they change career, clear subjects?
+                        // Optional: clear subjects when changing career
+                    }}
+                    onFocus={() => setShowCarreras(true)}
+                    placeholder="Ej: Ingeniería de Sistemas"
+                    placeholderTextColor="#94a3b8"
+                />
+                {showCarreras && filteredCarreras.length > 0 && (
+                    <View style={styles.suggestionsContainer}>
+                        {filteredCarreras.map((item, index) => (
+                            <Pressable
+                                key={index}
+                                style={styles.suggestionItem}
+                                onPress={() => {
+                                    if (item !== career) {
+                                        setCareer(item);
+                                        // Auto-clear subjects if career changes to something else to prevent invalid subjects
+                                        setSubjects([]);
+                                    } else {
+                                        setCareer(item);
+                                    }
+                                    setShowCarreras(false);
+                                }}>
+                                <Text style={styles.suggestionText}>{item}</Text>
+                            </Pressable>
+                        ))}
+                    </View>
+                )}
+            </View>
 
             <Text style={styles.label}>Semestre actual</Text>
             <TextInput
@@ -93,18 +280,52 @@ export default function ProfileEditScreen() {
                 placeholderTextColor="#94a3b8"
             />
 
-            <Text style={styles.label}>Materias inscritas</Text>
-            <View style={styles.subjectInputRow}>
-                <TextInput
-                    style={[styles.input, styles.flexInput]}
-                    value={newSubject}
-                    onChangeText={setNewSubject}
-                    placeholder="Ej: Cálculo III"
-                    placeholderTextColor="#94a3b8"
-                />
-                <Pressable style={styles.addButton} onPress={handleAddSubject}>
-                    <Text style={styles.addButtonLabel}>Añadir</Text>
-                </Pressable>
+            <View style={{ zIndex: 9 }}>
+                <Text style={styles.label}>Materias inscritas</Text>
+                
+                {!career ? (
+                    <Text style={styles.infoText}>Selecciona tu carrera primero</Text>
+                ) : (!isSistemas ? (
+                    <Text style={styles.infoText}>El catálogo de materias para tu carrera aún no está disponible, ingresalas manualmente por favor.</Text>
+                ) : null)}
+
+                {career ? (
+                    <View style={styles.subjectInputRow}>
+                        <TextInput
+                            style={[styles.input, styles.flexInput]}
+                            value={newSubject}
+                            onChangeText={(text) => {
+                                setNewSubject(text);
+                                setShowSubjects(true);
+                            }}
+                            onFocus={() => setShowSubjects(true)}
+                            placeholder="Buscar materia..."
+                            placeholderTextColor="#94a3b8"
+                        />
+                        <Pressable style={styles.addButton} onPress={handleAddSubject}>
+                            <Text style={styles.addButtonLabel}>Añadir</Text>
+                        </Pressable>
+                    </View>
+                ) : null}
+
+                {showSubjects && isSistemas && filteredSubjects.length > 0 && (
+                    <View style={[styles.suggestionsContainer, { top: 70 }]}>
+                        {filteredSubjects.slice(0, 15).map((item, index) => (
+                            <Pressable
+                                key={index}
+                                style={styles.suggestionItem}
+                                onPress={() => {
+                                    if (!subjects.includes(item)) {
+                                        setSubjects([...subjects, item]);
+                                    }
+                                    setNewSubject('');
+                                    setShowSubjects(false);
+                                }}>
+                                <Text style={styles.suggestionText}>{item}</Text>
+                            </Pressable>
+                        ))}
+                    </View>
+                )}
             </View>
 
             {subjects.length === 0 ? (
@@ -165,6 +386,12 @@ const styles = StyleSheet.create({
         color: '#334155',
         marginBottom: 8,
     },
+    infoText: {
+        color: '#64748b',
+        fontSize: 13,
+        marginBottom: 12,
+        fontStyle: 'italic',
+    },
     input: {
         backgroundColor: '#ffffff',
         borderWidth: 1,
@@ -179,6 +406,36 @@ const styles = StyleSheet.create({
     flexInput: {
         flex: 1,
         marginBottom: 0,
+    },
+    suggestionsContainer: {
+        maxHeight: 200,
+        backgroundColor: '#ffffff',
+        borderWidth: 1,
+        borderColor: '#cbd5e1',
+        borderRadius: 8,
+        marginTop: -12,
+        marginBottom: 16,
+        overflow: 'hidden',
+        position: 'absolute',
+        top: 70, // Below the input field
+        left: 0,
+        right: 0,
+        zIndex: 20,
+        elevation: 5,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+    },
+    suggestionItem: {
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: '#f1f5f9',
+    },
+    suggestionText: {
+        fontSize: 15,
+        color: '#334155',
     },
     subjectInputRow: {
         flexDirection: 'row',
