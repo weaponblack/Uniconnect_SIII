@@ -676,4 +676,19 @@ const styles = StyleSheet.create({
         fontStyle: 'italic',
         marginTop: 8,
     },
+    deleteButton: {
+        backgroundColor: '#fee2e2',
+        borderWidth: 1,
+        borderColor: '#ef4444',
+        paddingVertical: 14,
+        borderRadius: 8,
+        alignItems: 'center',
+        marginTop: 8,
+        marginBottom: 20,
+    },
+    deleteButtonText: {
+        color: '#dc2626',
+        fontWeight: '700',
+        fontSize: 15,
+    },
 });
