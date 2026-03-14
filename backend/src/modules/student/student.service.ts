@@ -101,17 +101,38 @@ export async function getAllSubjects() {
     });
 }
 
-export async function searchStudentsByName(query: string) {
+export async function searchStudentsByName(query: string, searcherId: string) {
     if (!query || query.trim().length === 0) {
+        return [];
+    }
+
+    // Get the searcher's career to filter by it
+    const searcher = await prisma.user.findUnique({
+        where: { id: searcherId },
+        select: { career: true }
+    });
+
+    if (!searcher || !searcher.career) {
+        // If the searcher has no career, they shouldn't be searching or get no results
         return [];
     }
 
     return prisma.user.findMany({
         where: {
-            name: {
-                contains: query,
-                mode: 'insensitive'
-            }
+            AND: [
+                {
+                    name: {
+                        contains: query,
+                        mode: 'insensitive'
+                    }
+                },
+                {
+                    career: searcher.career
+                },
+                {
+                    id: { not: searcherId } // Exclude current user
+                }
+            ]
         },
         select: {
             id: true,

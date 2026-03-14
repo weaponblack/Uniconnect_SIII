@@ -37,8 +37,9 @@ export async function getSubjectsHandler(req: Request, res: Response, next: Next
 
 export async function searchStudentsHandler(req: Request, res: Response, next: NextFunction) {
     try {
+        const userId = req.user!.sub;
         const query = req.query.name as string;
-        const students = await searchStudentsByName(query);
+        const students = await searchStudentsByName(query, userId);
         res.json(students);
     } catch (error) {
         next(error);
