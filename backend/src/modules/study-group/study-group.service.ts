@@ -61,10 +61,27 @@ export async function deleteStudyGroup(groupId: string, ownerId: string) {
 }
 
 export async function addMembersToGroup(groupId: string, ownerId: string, data: AddMembersInput) {
-    const group = await prisma.studyGroup.findUnique({ where: { id: groupId } });
+    const group = await prisma.studyGroup.findUnique({
+        where: { id: groupId },
+        include: { owner: true }
+    });
 
     if (!group) throw new AppError(404, 'Study group not found');
     if (group.ownerId !== ownerId) throw new AppError(403, 'Only the owner can add members');
+
+    // Filter/Validate: only students from the same career as the owner can be added
+    const studentsToAdd = await prisma.user.findMany({
+        where: {
+            id: { in: data.memberIds }
+        },
+        select: { id: true, name: true, career: true }
+    });
+
+    for (const student of studentsToAdd) {
+        if (student.career !== group.owner.career) {
+            throw new AppError(400, `El estudiante ${student.name || student.id} no pertenece a la carrera ${group.owner.career}`);
+        }
+    }
 
     return prisma.studyGroup.update({
         where: { id: groupId },

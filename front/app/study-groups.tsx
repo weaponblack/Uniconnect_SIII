@@ -34,6 +34,11 @@ export default function StudyGroupsScreen() {
     const [isRemovingMember, setIsRemovingMember] = useState<string | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
 
+    // Group info edit state
+    const [editInfoName, setEditInfoName] = useState('');
+    const [editInfoDesc, setEditInfoDesc] = useState('');
+    const [isUpdatingInfo, setIsUpdatingInfo] = useState(false);
+
     useFocusEffect(
         useCallback(() => {
             async function fetchGroups() {
@@ -192,6 +197,29 @@ export default function StudyGroupsScreen() {
         }
     };
 
+    const handleUpdateGroupInfo = async () => {
+        if (!editingGroup || !editInfoName.trim()) return;
+        try {
+            setIsUpdatingInfo(true);
+            const updated = await updateStudyGroup(editingGroup.id, {
+                name: editInfoName.trim(),
+                description: editInfoDesc.trim(),
+            });
+            setEditingGroup(updated);
+            setGroups(groups.map(g => (g.id === updated.id ? updated : g)));
+            if (Platform.OS === 'web') {
+                window.alert('Información del grupo actualizada.');
+            } else {
+                Alert.alert('Éxito', 'Información del grupo actualizada.');
+            }
+        } catch (error) {
+            console.error('Update group info error', error);
+            Alert.alert('Error', 'No se pudo actualizar la información del grupo.');
+        } finally {
+            setIsUpdatingInfo(false);
+        }
+    };
+
     if (isLoading || !session) {
         return (
             <View style={styles.loaderContainer}>
@@ -210,18 +238,65 @@ export default function StudyGroupsScreen() {
                     <Text style={styles.backButtonText}>← Volver a mis grupos</Text>
                 </Pressable>
 
-                <Text style={styles.title}>Gestionar: {editingGroup.name}</Text>
-                <Text style={styles.subtitle}>{editingGroup.description || 'Sin descripción'}</Text>
+                {session.user.id === editingGroup.ownerId ? (
+                    <View style={styles.card}>
+                        <Text style={styles.cardTitle}>Información del Grupo</Text>
+                        <Text style={styles.label}>Nombre</Text>
+                        <TextInput
+                            style={styles.input}
+                            value={editInfoName}
+                            onChangeText={setEditInfoName}
+                            placeholder="Nombre del grupo"
+                        />
+                        <Text style={styles.label}>Descripción</Text>
+                        <TextInput
+                            style={[styles.input, styles.textArea]}
+                            value={editInfoDesc}
+                            onChangeText={setEditInfoDesc}
+                            placeholder="Descripción del grupo"
+                            multiline
+                        />
+                        <Pressable
+                            style={[styles.saveModalButton, { paddingVertical: 12, borderRadius: 8 }, isUpdatingInfo && { opacity: 0.6 }]}
+                            onPress={handleUpdateGroupInfo}
+                            disabled={isUpdatingInfo}
+                        >
+                            <Text style={styles.saveModalButtonText}>
+                                {isUpdatingInfo ? 'Guardando...' : 'Guardar Cambios'}
+                            </Text>
+                        </Pressable>
+                    </View>
+                ) : (
+                    <>
+                        <Text style={styles.title}>Gestionar: {editingGroup.name}</Text>
+                        <Text style={styles.subtitle}>{editingGroup.description || 'Sin descripción'}</Text>
+                    </>
+                )}
 
                 <View style={styles.card}>
                     <Text style={styles.cardTitle}>Miembros actuales ({editingGroup.members.length})</Text>
                     {editingGroup.members.map((member) => (
                         <View key={member.id} style={styles.memberItem}>
-                            <Text style={styles.memberName}>{member.name || member.email}</Text>
-                            <Text style={styles.memberCareer}>{member.career || 'Sin carrera'} • Semestre {member.currentSemester || '?'}</Text>
-                            {member.id === editingGroup.ownerId ? (
-                                <View style={styles.ownerBadge}><Text style={styles.ownerBadgeText}>Propietario</Text></View>
-                            ) : null}
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={styles.memberName}>{member.name || member.email}</Text>
+                                    <Text style={styles.memberCareer}>{member.career || 'Sin carrera'} • Semestre {member.currentSemester || '?'}</Text>
+                                    {member.id === editingGroup.ownerId ? (
+                                        <View style={styles.ownerBadge}><Text style={styles.ownerBadgeText}>Administrador</Text></View>
+                                    ) : null}
+                                </View>
+                                {session.user.id === editingGroup.ownerId && member.id !== editingGroup.ownerId && (
+                                    <Pressable
+                                        onPress={() => handleRemoveMember(member.id, member.name || member.email)}
+                                        disabled={isRemovingMember === member.id}
+                                        style={styles.removeMemberButton}
+                                    >
+                                        <Text style={styles.removeMemberButtonText}>
+                                            {isRemovingMember === member.id ? '...' : 'Eliminar'}
+                                        </Text>
+                                    </Pressable>
+                                )}
+                            </View>
                         </View>
                     ))}
                 </View>
@@ -307,7 +382,7 @@ export default function StudyGroupsScreen() {
                                     <Text style={styles.groupName}>{group.name}</Text>
                                     {isOwner && (
                                         <View style={styles.ownerBadge}>
-                                            <Text style={styles.ownerBadgeText}>Propietario</Text>
+                                            <Text style={styles.ownerBadgeText}>Administrador</Text>
                                         </View>
                                     )}
                                 </View>
@@ -315,7 +390,11 @@ export default function StudyGroupsScreen() {
                                 <Text style={styles.groupMembersCount}>{group.members.length} miembros</Text>
                                 <Pressable
                                     style={styles.manageButton}
-                                    onPress={() => setEditingGroup(group)}
+                                    onPress={() => {
+                                        setEditingGroup(group);
+                                        setEditInfoName(group.name);
+                                        setEditInfoDesc(group.description || '');
+                                    }}
                                 >
                                     <Text style={styles.manageButtonText}>{isOwner ? 'Gestionar' : 'Ver grupo'}</Text>
                                 </Pressable>
@@ -451,10 +530,7 @@ const styles = StyleSheet.create({
         marginBottom: 16,
         borderWidth: 1,
         borderColor: '#e2e8f0',
-        shadowColor: '#000',
-        shadowOpacity: 0.05,
-        shadowRadius: 10,
-        shadowOffset: { width: 0, height: 4 },
+        boxShadow: '0px 4px 10px rgba(0, 0, 0, 0.05)',
         elevation: 2,
     },
     groupHeader: {
@@ -493,6 +569,17 @@ const styles = StyleSheet.create({
         fontSize: 11,
         fontWeight: '700',
     },
+    removeMemberButton: {
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 6,
+        backgroundColor: '#fee2e2',
+    },
+    removeMemberButtonText: {
+        color: '#ef4444',
+        fontSize: 12,
+        fontWeight: '600',
+    },
     manageButton: {
         backgroundColor: '#f1f5f9',
         paddingVertical: 10,
@@ -515,10 +602,7 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         paddingVertical: 16,
         alignItems: 'center',
-        shadowColor: '#003e70',
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        shadowOffset: { width: 0, height: 4 },
+        boxShadow: '0px 4px 8px rgba(0, 62, 112, 0.3)',
         elevation: 4,
     },
     fabText: {
