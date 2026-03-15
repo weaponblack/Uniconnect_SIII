@@ -1,5 +1,4 @@
-import { authConfig } from '@/constants/AuthConfig';
-import { loadSession } from '@/lib/session';
+import apiClient from './api-client';
 
 type Subject = {
     id: string;
@@ -24,42 +23,17 @@ export type UpdateProfilePayload = {
     subjects?: string[];
 };
 
-async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
-    const session = await loadSession();
-    if (!session) {
-        throw new Error('Not authenticated');
-    }
-
-    const headers = new Headers(options.headers);
-    headers.set('Authorization', `Bearer ${session.accessToken}`);
-    if (!headers.has('Content-Type') && options.method !== 'GET') {
-        headers.set('Content-Type', 'application/json');
-    }
-
-    const response = await fetch(`${authConfig.backendUrl}${endpoint}`, {
-        ...options,
-        headers,
-    });
-
-    if (!response.ok) {
-        const errorBody = await response.json().catch(() => ({}));
-        throw new Error(errorBody.message || `Request failed with status ${response.status}`);
-    }
-
-    return response.json();
-}
-
 export async function getStudentProfile(): Promise<StudentProfile> {
-    return fetchWithAuth('/student/profile');
+    const response = await apiClient.get<StudentProfile>('/student/profile');
+    return response.data;
 }
 
 export async function updateStudentProfile(data: UpdateProfilePayload): Promise<StudentProfile> {
-    return fetchWithAuth('/student/profile', {
-        method: 'PUT',
-        body: JSON.stringify(data),
-    });
+    const response = await apiClient.put<StudentProfile>('/student/profile', data);
+    return response.data;
 }
 
 export async function getAllSubjects(): Promise<Subject[]> {
-    return fetchWithAuth('/student/subjects');
+    const response = await apiClient.get<Subject[]>('/student/subjects');
+    return response.data;
 }

@@ -1,47 +1,32 @@
-import type { Request, Response, NextFunction } from 'express';
+import type { Request, Response } from 'express';
 import { getStudentProfile, updateStudentProfile, getAllSubjects, searchStudentsByName } from './student.service.js';
 import { updateProfileSchema } from './student.schemas.js';
+import { catchAsync } from '../../lib/catch-async.js';
 
-export async function getProfileHandler(req: Request, res: Response, next: NextFunction) {
-    try {
-        const payload = req.user!;
-        const profile = await getStudentProfile(payload.sub, payload);
-        res.json(profile);
-    } catch (error) {
-        next(error);
-    }
-}
+export const getProfileHandler = catchAsync(async (req: Request, res: Response) => {
+    const payload = req.user!;
+    const profile = await getStudentProfile(payload.sub, payload);
+    res.json(profile);
+});
 
-export async function updateProfileHandler(req: Request, res: Response, next: NextFunction) {
-    try {
-        const payload = req.user!;
+export const updateProfileHandler = catchAsync(async (req: Request, res: Response) => {
+    const payload = req.user!;
 
-        // Validate request body
-        const data = updateProfileSchema.parse(req.body);
+    // Validate request body
+    const data = updateProfileSchema.parse(req.body);
 
-        const updatedProfile = await updateStudentProfile(payload.sub, data, payload);
-        res.json(updatedProfile);
-    } catch (error) {
-        next(error);
-    }
-}
+    const updatedProfile = await updateStudentProfile(payload.sub, data, payload);
+    res.json(updatedProfile);
+});
 
-export async function getSubjectsHandler(req: Request, res: Response, next: NextFunction) {
-    try {
-        const subjects = await getAllSubjects();
-        res.json(subjects);
-    } catch (error) {
-        next(error);
-    }
-}
+export const getSubjectsHandler = catchAsync(async (req: Request, res: Response) => {
+    const subjects = await getAllSubjects();
+    res.json(subjects);
+});
 
-export async function searchStudentsHandler(req: Request, res: Response, next: NextFunction) {
-    try {
-        const userId = req.user!.sub;
-        const query = req.query.name as string;
-        const students = await searchStudentsByName(query, userId);
-        res.json(students);
-    } catch (error) {
-        next(error);
-    }
-}
+export const searchStudentsHandler = catchAsync(async (req: Request, res: Response) => {
+    const userId = req.user!.sub;
+    const query = req.query.name as string;
+    const students = await searchStudentsByName(query, userId, req.user);
+    res.json(students);
+});

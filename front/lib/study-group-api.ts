@@ -1,5 +1,4 @@
-import { authConfig } from '@/constants/AuthConfig';
-import { loadSession } from '@/lib/session';
+import apiClient from './api-client';
 
 export type StudyGroupMember = {
     id: string;
@@ -26,76 +25,36 @@ export type StudyGroup = {
     updatedAt: string;
 };
 
-async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
-    const session = await loadSession();
-    if (!session) {
-        throw new Error('Not authenticated');
-    }
-
-    const headers = new Headers(options.headers);
-    headers.set('Authorization', `Bearer ${session.accessToken}`);
-    if (!headers.has('Content-Type') && options.method !== 'GET') {
-        headers.set('Content-Type', 'application/json');
-    }
-
-    const response = await fetch(`${authConfig.backendUrl}${endpoint}`, {
-        ...options,
-        headers,
-    });
-
-    if (!response.ok) {
-        let errorBody = {};
-        try {
-            errorBody = await response.json();
-        } catch { }
-        // @ts-ignore
-        throw new Error(errorBody.message || `Request failed with status ${response.status}`);
-    }
-
-    if (response.status === 204) {
-        return;
-    }
-
-    return response.json();
-}
-
 export async function getStudentStudyGroups(studentId: string): Promise<StudyGroup[]> {
-    return fetchWithAuth(`/groups/student/${studentId}`);
+    const response = await apiClient.get<StudyGroup[]>(`/groups/student/${studentId}`);
+    return response.data;
 }
 
 export async function createStudyGroup(data: { name: string; description?: string }): Promise<StudyGroup> {
-    return fetchWithAuth('/groups', {
-        method: 'POST',
-        body: JSON.stringify(data),
-    });
+    const response = await apiClient.post<StudyGroup>('/groups', data);
+    return response.data;
 }
 
 export async function updateStudyGroup(groupId: string, data: { name?: string; description?: string }): Promise<StudyGroup> {
-    return fetchWithAuth(`/groups/${groupId}`, {
-        method: 'PUT',
-        body: JSON.stringify(data),
-    });
+    const response = await apiClient.put<StudyGroup>(`/groups/${groupId}`, data);
+    return response.data;
 }
 
 export async function addMembersToStudyGroup(groupId: string, memberIds: string[]): Promise<StudyGroup> {
-    return fetchWithAuth(`/groups/${groupId}/members`, {
-        method: 'POST',
-        body: JSON.stringify({ memberIds }),
-    });
+    const response = await apiClient.post<StudyGroup>(`/groups/${groupId}/members`, { memberIds });
+    return response.data;
 }
 
 export async function searchStudentsByName(query: string): Promise<StudyGroupMember[]> {
-    return fetchWithAuth(`/student/search?name=${encodeURIComponent(query)}`);
+    const response = await apiClient.get<StudyGroupMember[]>(`/student/search?name=${encodeURIComponent(query)}`);
+    return response.data;
 }
 
 export async function deleteStudyGroup(groupId: string): Promise<void> {
-    return fetchWithAuth(`/groups/${groupId}`, {
-        method: 'DELETE',
-    });
+    await apiClient.delete(`/groups/${groupId}`);
 }
 
 export async function removeMemberFromStudyGroup(groupId: string, memberId: string): Promise<StudyGroup> {
-    return fetchWithAuth(`/groups/${groupId}/members/${memberId}`, {
-        method: 'DELETE',
-    });
+    const response = await apiClient.delete<StudyGroup>(`/groups/${groupId}/members/${memberId}`);
+    return response.data;
 }
