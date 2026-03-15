@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View, Modal, Alert, Platform } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View, Modal, Platform } from 'react-native';
+import { useToast } from '@/components/Toast';
 import { Stack, router, useFocusEffect } from 'expo-router';
 import { loadSession, type SessionData } from '@/lib/session';
 import {
@@ -15,6 +16,7 @@ import {
 } from '@/lib/study-group-api';
 
 export default function StudyGroupsScreen() {
+    const { showToast } = useToast();
     const [session, setSession] = useState<SessionData | null>(null);
     const [groups, setGroups] = useState<StudyGroup[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -66,7 +68,7 @@ export default function StudyGroupsScreen() {
         if (!trimmedName) return;
         
         if (trimmedName.length < 3) {
-            alert('El nombre del grupo debe tener al menos 3 caracteres');
+            showToast('El nombre del grupo debe tener al menos 3 caracteres', 'error');
             return;
         }
 
@@ -80,6 +82,7 @@ export default function StudyGroupsScreen() {
             setCreateModalVisible(false);
             setNewGroupName('');
             setNewGroupDesc('');
+            showToast('Grupo creado con éxito', 'success');
         } catch (error: any) {
             console.error('Error creating group', error);
             // errorHandler already shows an Alert in the apiClient interceptor, 
@@ -109,7 +112,7 @@ export default function StudyGroupsScreen() {
             }
         } catch (error) {
             console.error('Search error', error);
-            alert('Error al buscar estudiantes');
+            showToast('Error al buscar estudiantes', 'error');
         } finally {
             setIsSearching(false);
         }
@@ -123,10 +126,10 @@ export default function StudyGroupsScreen() {
             setEditingGroup(updatedGroup);
             setGroups(groups.map(g => (g.id === updatedGroup.id ? updatedGroup : g)));
             setSearchResults(searchResults.filter(r => r.id !== memberId));
-            alert('Estudiante añadido');
+            showToast('Estudiante añadido', 'success');
         } catch (error) {
             console.error('Add member error', error);
-            alert('Error al añadir miembro');
+            showToast('Error al añadir miembro', 'error');
         } finally {
             setIsAddingMember(false);
         }
@@ -141,14 +144,10 @@ export default function StudyGroupsScreen() {
                 const updatedGroup = await removeMemberFromStudyGroup(editingGroup.id, memberId);
                 setEditingGroup(updatedGroup);
                 setGroups(groups.map(g => (g.id === updatedGroup.id ? updatedGroup : g)));
-                if (Platform.OS === 'web') {
-                    window.alert('Miembro eliminado.');
-                } else {
-                    Alert.alert('Éxito', 'Miembro eliminado.');
-                }
+                showToast('Miembro eliminado', 'success');
             } catch (error) {
                 console.error('Remove member error', error);
-                Alert.alert('Error', 'No se pudo eliminar al miembro.');
+                showToast('No se pudo eliminar al miembro', 'error');
             } finally {
                 setIsRemovingMember(null);
             }
@@ -159,6 +158,8 @@ export default function StudyGroupsScreen() {
                 void performRemove();
             }
         } else {
+            // Keep Alert for confirmation since it's a destructive action
+            const { Alert } = require('react-native');
             Alert.alert(
                 'Eliminar miembro',
                 `¿Seguro que deseas eliminar a ${memberName} del grupo?`,
@@ -179,14 +180,10 @@ export default function StudyGroupsScreen() {
                 await deleteStudyGroup(editingGroup.id);
                 setGroups(groups.filter(g => g.id !== editingGroup.id));
                 setEditingGroup(null);
-                if (Platform.OS === 'web') {
-                    window.alert('El grupo ha sido eliminado con éxito.');
-                } else {
-                    Alert.alert('Éxito', 'El grupo ha sido eliminado.');
-                }
+                showToast('El grupo ha sido eliminado', 'success');
             } catch (error) {
                 console.error('Delete group error', error);
-                Alert.alert('Error', 'No se pudo eliminar el grupo.');
+                showToast('No se pudo eliminar el grupo', 'error');
             } finally {
                 setIsDeleting(false);
             }
@@ -197,6 +194,8 @@ export default function StudyGroupsScreen() {
                 void performDelete();
             }
         } else {
+            // Keep Alert for confirmation
+            const { Alert } = require('react-native');
             Alert.alert(
                 'Eliminar Grupo',
                 `¿Estás seguro de que deseas eliminar el grupo "${editingGroup.name}"? Esta acción no se puede deshacer.`,
@@ -218,14 +217,10 @@ export default function StudyGroupsScreen() {
             });
             setEditingGroup(updated);
             setGroups(groups.map(g => (g.id === updated.id ? updated : g)));
-            if (Platform.OS === 'web') {
-                window.alert('Información del grupo actualizada.');
-            } else {
-                Alert.alert('Éxito', 'Información del grupo actualizada.');
-            }
+            showToast('Información del grupo actualizada', 'success');
         } catch (error) {
             console.error('Update group info error', error);
-            Alert.alert('Error', 'No se pudo actualizar la información del grupo.');
+            showToast('No se pudo actualizar la información del grupo', 'error');
         } finally {
             setIsUpdatingInfo(false);
         }

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useToast } from '@/components/Toast';
 import { router } from 'expo-router';
 import { getStudentProfile, updateStudentProfile, type StudentProfile } from '@/lib/student-api';
 
@@ -123,6 +124,7 @@ const MATERIAS_SISTEMAS = [
 ];
 
 export default function ProfileEditScreen() {
+    const { showToast } = useToast();
     const [profile, setProfile] = useState<StudentProfile | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
@@ -206,10 +208,11 @@ export default function ProfileEditScreen() {
                 currentSemester: parseInt(currentSemester, 10) || undefined,
                 subjects,
             });
+            showToast('Perfil actualizado correctamente', 'success');
             router.back();
         } catch (error) {
             console.error('Failed to update profile', error);
-            alert('Error al guardar el perfil');
+            showToast('Error al guardar el perfil', 'error');
         } finally {
             setIsSaving(false);
         }

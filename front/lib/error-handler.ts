@@ -1,4 +1,4 @@
-import { Alert } from 'react-native';
+import { showToast } from '../components/Toast';
 
 export interface ApiError {
   message: string;
@@ -21,7 +21,6 @@ export const errorHandler = (error: any) => {
         break;
       case 401:
         errorMessage = 'Sesión expirada o no autorizada';
-        // Aquí se podría disparar una acción de logout global si fuera necesario
         break;
       case 404:
         errorMessage = 'Recurso no encontrado';
@@ -38,8 +37,8 @@ export const errorHandler = (error: any) => {
     errorMessage = error.message || errorMessage;
   }
 
-  // Mostrar alerta al usuario
-  Alert.alert('Error', errorMessage);
+  // Mostrar notificación al usuario
+  showToast(errorMessage, 'error');
 
   return {
     message: errorMessage,
