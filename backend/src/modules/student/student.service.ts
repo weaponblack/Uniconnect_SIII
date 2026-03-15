@@ -2,8 +2,8 @@ import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../errors/app-error.js';
 import type { UpdateProfileInput } from './student.schemas.js';
 
-export async function getStudentProfile(userId: string) {
-    const user = await prisma.user.findUnique({
+export async function getStudentProfile(userId: string, payload?: any) {
+    let user = await prisma.user.findUnique({
         where: { id: userId },
         select: {
             id: true,
@@ -23,6 +23,57 @@ export async function getStudentProfile(userId: string) {
         },
     });
 
+    // Auto-register user from Auth0 if it doesn't exist
+    if (!user && payload && payload.email) {
+        // First check if a user with this email already exists but with a different ID
+        user = await prisma.user.findUnique({
+            where: { email: payload.email },
+            select: {
+                id: true,
+                email: true,
+                name: true,
+                avatarUrl: true,
+                career: true,
+                currentSemester: true,
+                subjects: {
+                    select: {
+                        id: true,
+                        name: true,
+                        code: true,
+                        credits: true,
+                    },
+                },
+            },
+        });
+
+        if (!user) {
+            user = await prisma.user.create({
+                data: {
+                    id: userId,
+                    email: payload.email,
+                    name: payload.name || payload.nickname || 'New User',
+                    avatarUrl: payload.picture || null,
+                },
+                select: {
+                    id: true,
+                    email: true,
+                    name: true,
+                    avatarUrl: true,
+                    career: true,
+                    currentSemester: true,
+                    subjects: {
+                        select: {
+                            id: true,
+                            name: true,
+                            code: true,
+                            credits: true,
+                        },
+                    },
+                },
+            }) as any; // Cast correctly based on Prisma results
+        }
+    }
+
     if (!user) {
         throw new AppError(404, 'User not found');
     }
@@ -30,7 +81,19 @@ export async function getStudentProfile(userId: string) {
     return user;
 }
 
-export async function updateStudentProfile(userId: string, data: UpdateProfileInput) {
+export async function updateStudentProfile(userId: string, data: UpdateProfileInput, payload?: any) {
+    // Resolve DB internal User ID in case of Auth0 mismatch
+    let dbUserId = userId;
+    if (payload && payload.email) {
+        const existing = await prisma.user.findUnique({
+            where: { email: payload.email },
+            select: { id: true }
+        });
+        if (existing) {
+            dbUserId = existing.id;
+        }
+    }
+
     const { career, currentSemester, subjects } = data;
 
     // Process subjects: create them if they do not exist, and link them to the user.
@@ -39,7 +102,7 @@ export async function updateStudentProfile(userId: string, data: UpdateProfileIn
     if (subjects !== undefined) {
         // 1. Unlink all current subjects first
         await prisma.user.update({
-            where: { id: userId },
+            where: { id: dbUserId },
             data: {
                 subjects: {
                     set: [], // Clear relations
@@ -54,7 +117,7 @@ export async function updateStudentProfile(userId: string, data: UpdateProfileIn
         }));
 
         const user = await prisma.user.update({
-            where: { id: userId },
+            where: { id: dbUserId },
             data: {
                 career: career !== undefined ? career : undefined,
                 currentSemester: currentSemester !== undefined ? currentSemester : undefined,
@@ -76,7 +139,7 @@ export async function updateStudentProfile(userId: string, data: UpdateProfileIn
     } else {
         // Only update primitive fields
         const user = await prisma.user.update({
-            where: { id: userId },
+            where: { id: dbUserId },
             data: {
                 career: career !== undefined ? career : undefined,
                 currentSemester: currentSemester !== undefined ? currentSemester : undefined,

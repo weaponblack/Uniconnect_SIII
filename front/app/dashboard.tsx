@@ -4,8 +4,10 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View, ScrollView } from
 import { clearSession, loadSession, type SessionData } from '@/lib/session';
 import { logoutWithRefreshToken } from '@/lib/auth-api';
 import { getStudentProfile, type StudentProfile } from '@/lib/student-api';
+import { useAuth0 } from 'react-native-auth0';
 
 export default function DashboardScreen() {
+  const { clearSession: auth0ClearSession } = useAuth0();
   const [session, setSession] = useState<SessionData | null>(null);
   const [profile, setProfile] = useState<StudentProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -43,16 +45,19 @@ export default function DashboardScreen() {
     try {
       setIsLoggingOut(true);
       await logoutWithRefreshToken(session.refreshToken);
+      await auth0ClearSession();
     } catch {
       // Ignore backend logout error to avoid leaving stale local session
     } finally {
       await clearSession();
       setIsLoggingOut(false);
-      router.replace('/');
-    }
-  }
 
-  if (isLoading) {
+      // Navigate safely avoiding layout unmount crashes
+      setTimeout(() => {
+        router.replace('/');
+      }, 0);
+    }
+  }  if (isLoading) {
     return (
       <View style={styles.loaderContainer}>
         <ActivityIndicator />
@@ -78,8 +83,8 @@ export default function DashboardScreen() {
           </Pressable>
         </View>
 
-        <Text style={styles.cardText}>Correo: {session.user.email}</Text>
-        <Text style={styles.cardText}>Nombre: {session.user.name ?? 'Sin nombre'}</Text>
+        <Text style={styles.cardText}>Correo: {profile?.email || session.user.email}</Text>
+        <Text style={styles.cardText}>Nombre: {profile?.name || session.user.name || 'Sin nombre'}</Text>
         <Text style={styles.cardText}>Rol: {session.user.role === 'student' ? 'Estudiante' : session.user.role === 'admin' ? 'Administrador' : session.user.role}</Text>
 
         {profile && (

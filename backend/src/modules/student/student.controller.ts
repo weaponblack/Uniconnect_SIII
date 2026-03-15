@@ -4,8 +4,8 @@ import { updateProfileSchema } from './student.schemas.js';
 
 export async function getProfileHandler(req: Request, res: Response, next: NextFunction) {
     try {
-        const userId = req.user!.sub;
-        const profile = await getStudentProfile(userId);
+        const payload = req.user!;
+        const profile = await getStudentProfile(payload.sub, payload);
         res.json(profile);
     } catch (error) {
         next(error);
@@ -14,12 +14,12 @@ export async function getProfileHandler(req: Request, res: Response, next: NextF
 
 export async function updateProfileHandler(req: Request, res: Response, next: NextFunction) {
     try {
-        const userId = req.user!.sub;
+        const payload = req.user!;
 
         // Validate request body
         const data = updateProfileSchema.parse(req.body);
 
-        const updatedProfile = await updateStudentProfile(userId, data);
+        const updatedProfile = await updateStudentProfile(payload.sub, data, payload);
         res.json(updatedProfile);
     } catch (error) {
         next(error);

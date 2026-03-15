@@ -4,9 +4,9 @@ import { createStudyGroupSchema, updateStudyGroupSchema, addMembersSchema } from
 
 export async function createStudyGroupHandler(req: Request, res: Response, next: NextFunction) {
     try {
-        const userId = req.user!.sub;
+        const payload = req.user!;
         const data = createStudyGroupSchema.parse(req.body);
-        const newGroup = await createStudyGroup(userId, data);
+        const newGroup = await createStudyGroup(payload.sub, data, payload);
         res.status(201).json(newGroup);
     } catch (error) {
         next(error);
@@ -15,18 +15,13 @@ export async function createStudyGroupHandler(req: Request, res: Response, next:
 
 export async function getStudentStudyGroupsHandler(req: Request, res: Response, next: NextFunction) {
     try {
-        // the endpoint is GET /groups/student/:studentId but usually the student views their own groups 
-        // using the authenticated userId if the param isn't strictly required to be another.
-        // I will use req.params.studentId
-        const studentId = req.params.studentId;
-        const groups = await getStudentStudyGroups(studentId);
+        const payload = req.user!;
+        const groups = await getStudentStudyGroups(payload.sub, payload);
         res.json(groups);
     } catch (error) {
         next(error);
     }
-}
-
-export async function updateStudyGroupHandler(req: Request, res: Response, next: NextFunction) {
+}export async function updateStudyGroupHandler(req: Request, res: Response, next: NextFunction) {
     try {
         const userId = req.user!.sub;
         const groupId = req.params.groupId;

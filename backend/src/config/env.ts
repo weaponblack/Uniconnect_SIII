@@ -13,6 +13,8 @@ const envSchema = z.object({
   ACCESS_TOKEN_TTL: z.string().default('15m'),
   REFRESH_TOKEN_PEPPER: z.string().min(16),
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().positive().default(30),
+  AUTH0_DOMAIN: z.string().min(1).default('dev-pk5s7tzyc17vqt54.us.auth0.com'),
+  AUTH0_AUDIENCE: z.string().optional().default(''),
 });
 
 const parsed = envSchema.safeParse(process.env);

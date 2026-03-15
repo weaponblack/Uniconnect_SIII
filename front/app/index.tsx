@@ -1,8 +1,48 @@
-import { Link } from 'expo-router';
+import { Link, router, useFocusEffect } from 'expo-router';
 import { Image, StyleSheet, Text, View } from 'react-native';
+import { useAuth0 } from 'react-native-auth0';
+import { useCallback } from 'react';
+import { saveSession } from '@/lib/session';
 
 export default function LandingScreen() {
-  return (
+  const { user, getCredentials } = useAuth0();
+
+  useFocusEffect(
+    useCallback(() => {
+      // Solo actuar si Auth0 tiene sesión iniciada al ENFOCAR esta pantalla root
+      if (user) {
+        // En Web, Auth0 hace un redirect de página completa.
+        // Por ende, debemos atrapar y guardar la sesión aquí al volver.
+        const syncSession = async () => {
+          try {
+            const credentials = await getCredentials();
+            if (credentials?.idToken) {
+              await saveSession({
+                user: {
+                  id: 'auth0|' + Date.now().toString(),
+                  name: user?.name || null,
+                  email: user?.email || 'auth0@ejemplo.com',
+                  role: 'student',
+                  avatarUrl: null
+                },
+                accessToken: credentials.idToken, // Mandar el JWT validable
+                refreshToken: credentials.accessToken
+              });
+            }
+          } catch (e) {
+            console.error("No se pudo obtener las credenciales web", e);
+          } finally {
+            // Usamos un pequeño delay para evitar bugs de enrutamiento
+            setTimeout(() => {
+              router.replace('/dashboard');
+            }, 100);
+          }
+        };
+
+        syncSession();
+      }
+    }, [user, getCredentials])
+  );  return (
     <View style={styles.container}>
       <View style={styles.logoContainer}>
         <Image source={require('../assets/images/LogoUC.png')} style={styles.logo} />

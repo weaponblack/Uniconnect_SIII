@@ -2,13 +2,24 @@ import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../errors/app-error.js';
 import type { CreateStudyGroupInput, UpdateStudyGroupInput, AddMembersInput } from './study-group.schemas.js';
 
-export async function createStudyGroup(ownerId: string, data: CreateStudyGroupInput) {
+export async function createStudyGroup(ownerId: string, data: CreateStudyGroupInput, payload?: any) {
+    let dbOwnerId = ownerId;
+    if (payload && payload.email) {
+        const existing = await prisma.user.findUnique({
+            where: { email: payload.email },
+            select: { id: true }
+        });
+        if (existing) {
+            dbOwnerId = existing.id;
+        }
+    }
+
     return prisma.studyGroup.create({
         data: {
             ...data,
-            ownerId,
+            ownerId: dbOwnerId,
             members: {
-                connect: { id: ownerId }, // The owner is automatically a member
+                connect: { id: dbOwnerId }, // The owner is automatically a member
             },
         },
         include: {
@@ -18,11 +29,22 @@ export async function createStudyGroup(ownerId: string, data: CreateStudyGroupIn
     });
 }
 
-export async function getStudentStudyGroups(studentId: string) {
+export async function getStudentStudyGroups(studentId: string, payload?: any) {
+    let dbStudentId = studentId;
+    if (payload && payload.email) {
+        const existing = await prisma.user.findUnique({
+            where: { email: payload.email },
+            select: { id: true }
+        });
+        if (existing) {
+            dbStudentId = existing.id;
+        }
+    }
+
     return prisma.studyGroup.findMany({
         where: {
             members: {
-                some: { id: studentId }
+                some: { id: dbStudentId }
             }
         },
         include: {

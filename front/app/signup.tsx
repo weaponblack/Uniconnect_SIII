@@ -1,15 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useState } from 'react';
 import { router } from 'expo-router';
-import * as WebBrowser from 'expo-web-browser';
-import * as Google from 'expo-auth-session/providers/google.js';
-import { makeRedirectUri } from 'expo-auth-session';
-import { Alert, Platform, Pressable, StyleSheet, Text, View, TextInput, ScrollView, Image } from 'react-native';
-import Constants from 'expo-constants';
-import { authConfig, validateAuthConfig } from '@/constants/AuthConfig';
+import { Alert, Pressable, StyleSheet, Text, View, TextInput, ScrollView, Image } from 'react-native';
 import { saveSession } from '@/lib/session';
-import { signInWithGoogleIdToken, signInSimple } from '@/lib/auth-api';
-
-WebBrowser.maybeCompleteAuthSession();
+import { signInSimple } from '@/lib/auth-api';
+import { useAuth0 } from 'react-native-auth0';
 
 export default function SignUpScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -18,119 +12,44 @@ export default function SignUpScreen() {
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
 
-  const missingConfig = useMemo(
-    () => validateAuthConfig(Platform.OS as 'web' | 'android' | 'ios'),
-    []
-  );
-  const appOwnership = Constants.appOwnership;
-  const isExpoGo = appOwnership === 'expo';
-  const redirectUri = useMemo(
-    () => {
-      if (Platform.OS === 'web') {
-        return makeRedirectUri({
-          path: 'oauth',
-        });
+  const { authorize, user, isLoading, getCredentials } = useAuth0();
+
+  async function handleGoogleSignup() {
+    try {
+      setIsSubmitting(true);
+      setStatusText('Abriendo Auth0...');
+
+      await authorize({ scope: 'openid profile email' });
+
+      const credentials = await getCredentials();
+      if (credentials?.idToken) {
+        setStatusText('Iniciando sesión en el backend...');
+        
+        await saveSession({
+          user: {
+            id: 'auth0|' + Date.now().toString(),
+            name: user?.name || null,
+            email: user?.email || 'auth0@ejemplo.com',     
+            role: 'student',
+            avatarUrl: null
+          },
+          accessToken: credentials.idToken, // Usar el idToken (JWT) para que el backend lo reconozca
+          refreshToken: credentials.accessToken
+        });        setStatusText('Logueado, redirigiendo...');
+        setTimeout(() => {
+          router.replace('/dashboard');
+        }, 100);
+      } else {
+        setStatusText('No se recibió token.');
       }
-
-      return makeRedirectUri({
-        scheme: authConfig.scheme,
-        path: 'oauth',
-      });
-    },
-    []
-  );
-
-  const [request, response, promptAsync] = Google.useIdTokenAuthRequest(
-    {
-      webClientId: authConfig.googleWebClientId || undefined,
-      iosClientId: Platform.OS === 'ios' ? authConfig.googleIosClientId || undefined : undefined,
-      androidClientId:
-        Platform.OS === 'android' ? authConfig.googleAndroidClientId || undefined : undefined,
-      selectAccount: true,
-      extraParams: {
-        prompt: 'select_account consent',
-        ...(authConfig.googleHostedDomain ? { hd: authConfig.googleHostedDomain } : {}),
-      },
-      redirectUri,
-    },
-    Platform.OS === 'web' ? {} : { native: redirectUri }
-  );
-
-  useEffect(() => {
-    async function handleResponse() {
-      if (!response) {
-        return;
+    } catch (e: any) {
+      if (e.message !== 'a0.session.user_cancelled') {
+        Alert.alert('Error', e.message || 'Error al conectar con Auth0');
       }
-
-      if (response.type === 'error') {
-        const authError =
-          typeof response.error?.message === 'string'
-            ? response.error.message
-            : 'Google devolvio un error de autenticacion.';
-        setStatusText(`Google error: ${authError}`);
-        Alert.alert('Error de Google', authError);
-        return;
-      }
-
-      if (response?.type !== 'success') {
-        setStatusText(`OAuth response: ${response.type}`);
-        return;
-      }
-
-      const possibleResponse = response as unknown as {
-        params?: { id_token?: string; idToken?: string };
-        authentication?: { idToken?: string | null };
-      };
-      const idToken =
-        possibleResponse.params?.id_token ??
-        possibleResponse.params?.idToken ??
-        possibleResponse.authentication?.idToken ??
-        '';
-
-      if (!idToken) {
-        setStatusText('Google no devolvio idToken en la respuesta.');
-        Alert.alert('Error', 'Google no devolvio idToken.');
-        setIsSubmitting(false);
-        return;
-      }
-
-      try {
-        setIsSubmitting(true);
-        setStatusText('Validando token con backend...');
-        const session = await signInWithGoogleIdToken(idToken);
-        await saveSession(session);
-        setStatusText('Login OK, redirigiendo a dashboard...');
-        router.replace('/dashboard');
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'No se pudo iniciar sesion.';
-        setStatusText(`Backend error: ${message}`);
-        Alert.alert('Error de autenticacion', message);
-      } finally {
-        setIsSubmitting(false);
-      }
+      setStatusText('');
+    } finally {
+      setIsSubmitting(false);
     }
-
-    void handleResponse();
-  }, [response]);
-
-  function handleGoogleSignup() {
-    if (missingConfig.length > 0) {
-      Alert.alert(
-        'Configuracion incompleta',
-        `Faltan variables en front/.env: ${missingConfig.join(', ')}`
-      );
-      return;
-    }
-
-    if (isExpoGo && Platform.OS !== 'web') {
-      Alert.alert(
-        'Development Build requerido',
-        'Para Android/iOS debes probar Google Sign-In en un development build, no en Expo Go.'
-      );
-      return;
-    }
-
-    void promptAsync();
   }
 
   async function handleSimpleSignIn() {
@@ -242,10 +161,10 @@ export default function SignUpScreen() {
 
       {loginMethod === 'google' && (
         <Pressable
-          disabled={!request || isSubmitting}
+          disabled={isSubmitting}
           style={({ pressed }) => [
             styles.googleButton,
-            (pressed || isSubmitting || !request) && styles.googleButtonDisabled,
+            (pressed || isSubmitting) && styles.googleButtonDisabled,
           ]}
           onPress={handleGoogleSignup}>
           <Image
@@ -398,7 +317,5 @@ const styles = StyleSheet.create({
   },
   status: {
     marginTop: 16,
-    fontSize: 13,
-    color: '#111827',
   },
 });
