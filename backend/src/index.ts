@@ -9,6 +9,7 @@ import { studyGroupRouter } from './modules/study-group/study-group.routes.js';
 import { env } from './config/env.js';
 import { checkDbConnection, prisma } from './lib/prisma.js';
 import { AppError } from './errors/app-error.js';
+import { errorHandler } from './middlewares/error-handler.js';
 
 const app = express();
 const port = env.PORT;
@@ -69,23 +70,8 @@ app.use('/auth', authRouter);
 app.use('/student', studentRouter);
 app.use('/groups', studyGroupRouter);
 
-app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
-  if (err instanceof AppError) {
-    return res.status(err.statusCode).json({
-      message: err.message,
-    });
-  }
-
-  if (err instanceof Error) {
-    return res.status(400).json({
-      message: err.message,
-    });
-  }
-
-  return res.status(500).json({
-    message: 'Unexpected server error',
-  });
-});
+// Global Error Handler
+app.use(errorHandler);
 
 async function bootstrap() {
   try {
