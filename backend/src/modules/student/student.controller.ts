@@ -27,6 +27,6 @@ export const getSubjectsHandler = catchAsync(async (req: Request, res: Response)
 export const searchStudentsHandler = catchAsync(async (req: Request, res: Response) => {
     const userId = req.user!.sub;
     const query = req.query.name as string;
-    const students = await searchStudentsByName(query, userId);
+    const students = await searchStudentsByName(query, userId, req.user);
     res.json(students);
 });

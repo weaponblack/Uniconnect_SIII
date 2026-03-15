@@ -21,7 +21,7 @@ export const updateStudyGroupHandler = catchAsync(async (req: Request, res: Resp
     const groupId = req.params.groupId;
     const data = updateStudyGroupSchema.parse(req.body);
 
-    const updatedGroup = await updateStudyGroup(groupId, userId, data);
+    const updatedGroup = await updateStudyGroup(groupId, userId, data, req.user);
     res.json(updatedGroup);
 });
 
@@ -30,7 +30,7 @@ export const addMembersToGroupHandler = catchAsync(async (req: Request, res: Res
     const groupId = req.params.groupId;
     const data = addMembersSchema.parse(req.body);
 
-    const updatedGroup = await addMembersToGroup(groupId, userId, data);
+    const updatedGroup = await addMembersToGroup(groupId, userId, data, req.user);
     res.json(updatedGroup);
 });
 
@@ -38,7 +38,7 @@ export const deleteStudyGroupHandler = catchAsync(async (req: Request, res: Resp
     const userId = req.user!.sub;
     const groupId = req.params.groupId;
 
-    await deleteStudyGroup(groupId, userId);
+    await deleteStudyGroup(groupId, userId, req.user);
     res.status(204).send();
 });
 
@@ -47,6 +47,6 @@ export const removeMemberFromGroupHandler = catchAsync(async (req: Request, res:
     const groupId = req.params.groupId;
     const memberId = req.params.memberId;
 
-    const updatedGroup = await removeMemberFromGroup(groupId, userId, memberId);
+    const updatedGroup = await removeMemberFromGroup(groupId, userId, memberId, req.user);
     res.json(updatedGroup);
 });

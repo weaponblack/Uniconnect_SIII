@@ -17,22 +17,42 @@ export default function LandingScreen() {
           try {
             const credentials = await getCredentials();
             if (credentials?.idToken) {
+              // Save temporary session to allow API calls
               await saveSession({
                 user: {
-                  id: 'auth0|' + Date.now().toString(),
+                  id: user?.sub || 'temp-id',
                   name: user?.name || null,
-                  email: user?.email || 'auth0@ejemplo.com',
+                  email: user?.email || '',
                   role: 'student',
-                  avatarUrl: null
+                  avatarUrl: user?.picture || null
                 },
-                accessToken: credentials.idToken, // Mandar el JWT validable
-                refreshToken: credentials.accessToken
+                accessToken: credentials.idToken,
+                refreshToken: credentials.accessToken || ''
               });
+
+              // Fetch real profile from backend to get internal ID and Role
+              try {
+                const { getStudentProfile } = await import('@/lib/student-api');
+                const profile = await getStudentProfile();
+                
+                await saveSession({
+                  user: {
+                    id: profile.id,
+                    name: profile.name,
+                    email: profile.email,
+                    role: (profile as any).role || 'student',
+                    avatarUrl: profile.avatarUrl
+                  },
+                  accessToken: credentials.idToken,
+                  refreshToken: credentials.accessToken || ''
+                });
+              } catch (profileError) {
+                console.error("No se pudo sincronizar el perfil con el backend", profileError);
+              }
             }
           } catch (e) {
             console.error("No se pudo obtener las credenciales web", e);
           } finally {
-            // Usamos un pequeño delay para evitar bugs de enrutamiento
             setTimeout(() => {
               router.replace('/dashboard');
             }, 100);

@@ -62,20 +62,31 @@ export default function StudyGroupsScreen() {
     );
 
     const handleCreateGroup = async () => {
-        if (!newGroupName.trim()) return;
+        const trimmedName = newGroupName.trim();
+        if (!trimmedName) return;
+        
+        if (trimmedName.length < 3) {
+            alert('El nombre del grupo debe tener al menos 3 caracteres');
+            return;
+        }
+
         try {
             setIsCreating(true);
             const created = await createStudyGroup({
-                name: newGroupName.trim(),
+                name: trimmedName,
                 description: newGroupDesc.trim() || undefined,
             });
             setGroups([created, ...groups]);
             setCreateModalVisible(false);
             setNewGroupName('');
             setNewGroupDesc('');
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error creating group', error);
-            alert('Error al crear el grupo');
+            // errorHandler already shows an Alert in the apiClient interceptor, 
+            // but we can provide more context here if needed.
+            if (error.response?.data?.message) {
+                // The global errorHandler will show this, but we'll log it for debugging
+            }
         } finally {
             setIsCreating(false);
         }

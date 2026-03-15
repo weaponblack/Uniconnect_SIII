@@ -22,9 +22,11 @@ export const errorHandler = (
   }
 
   // Optional: Log unexpected errors for debugging
-  if (statusCode === 500) {
-    console.error('Unexpected Error:', err);
-  }
+  console.error('Error in errorHandler:', {
+    statusCode,
+    message,
+    err: err instanceof Error ? { name: err.name, message: err.message, stack: err.stack } : err
+  });
 
   res.status(statusCode).json({
     success: false,
