@@ -13,7 +13,7 @@ dist/
 **/dist/
 **/.expo/
 *.keystore
-.implementation_plan_errors.md
+implementation_plan_errors.md
 
 # OS
 .DS_Store
