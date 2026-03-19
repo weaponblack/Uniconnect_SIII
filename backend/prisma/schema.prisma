@@ -22,9 +22,10 @@ model User {
 
   identities     AuthIdentity[]
   sessions       Session[]
-  subjects       Subject[]      @relation("StudentSubjects")
-  ownedGroups    StudyGroup[]   @relation("GroupOwner")
-  memberOfGroups StudyGroup[]   @relation("GroupMembers")
+  subjects       Subject[]            @relation("StudentSubjects")
+  ownedGroups    StudyGroup[]         @relation("GroupOwner")
+  memberOfGroups StudyGroup[]         @relation("GroupMembers")
+  uploadedResources StudyGroupResource[]
 }
 
 model Subject {
@@ -76,6 +77,20 @@ model StudyGroup {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  owner   User   @relation("GroupOwner", fields: [ownerId], references: [id], onDelete: Cascade)
-  members User[] @relation("GroupMembers")
+  owner     User                 @relation("GroupOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  members   User[]               @relation("GroupMembers")
+  resources StudyGroupResource[]
+}
+
+model StudyGroupResource {
+  id         String   @id @default(cuid())
+  groupId    String
+  uploaderId String?
+  title      String
+  type       String   // "PDF" or "LINK"
+  url        String
+  createdAt  DateTime @default(now())
+
+  group    StudyGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  uploader User?      @relation(fields: [uploaderId], references: [id], onDelete: SetNull)
 }

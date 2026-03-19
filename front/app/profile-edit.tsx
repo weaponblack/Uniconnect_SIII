@@ -1,8 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View, Keyboard } from 'react-native';
 import { useToast } from '@/components/Toast';
 import { router } from 'expo-router';
 import { getStudentProfile, updateStudentProfile, type StudentProfile } from '@/lib/student-api';
+
+const normalizeString = (str: string) => {
+    if (!str) return '';
+    return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+};
 
 const CARRERAS = [
     "Administración de empresas agropecuarias",
@@ -139,16 +144,16 @@ export default function ProfileEditScreen() {
 
     const filteredCarreras = useMemo(() => {
         if (!career) return CARRERAS;
-        const lower = career.toLowerCase();
-        return CARRERAS.filter(c => c.toLowerCase().includes(lower));
+        const searchNorm = normalizeString(career);
+        return CARRERAS.filter(c => normalizeString(c).includes(searchNorm));
     }, [career]);
 
-    const isSistemas = career.toLowerCase() === "ingeniería de sistemas y computación";
+    const isSistemas = normalizeString(career) === normalizeString("Ingeniería de sistemas y computación");
 
     const filteredSubjects = useMemo(() => {
         if (!isSistemas) return [];
-        const lower = newSubject.toLowerCase();
-        return MATERIAS_SISTEMAS.filter(s => s.toLowerCase().includes(lower) && !subjects.includes(s));
+        const searchNorm = normalizeString(newSubject);
+        return MATERIAS_SISTEMAS.filter(s => normalizeString(s).includes(searchNorm) && !subjects.includes(s));
     }, [newSubject, subjects, isSistemas]);
 
     useEffect(() => {
@@ -173,7 +178,8 @@ export default function ProfileEditScreen() {
         if (!trimmed) return;
 
         if (isSistemas) {
-            const match = MATERIAS_SISTEMAS.find(m => m.toLowerCase() === trimmed.toLowerCase());
+            const searchNorm = normalizeString(trimmed);
+            const match = MATERIAS_SISTEMAS.find(m => normalizeString(m) === searchNorm);
             if (match && !subjects.includes(match)) {
                 setSubjects([...subjects, match]);
                 setNewSubject('');
@@ -199,6 +205,14 @@ export default function ProfileEditScreen() {
         if (career.trim() && !CARRERAS.includes(career.trim())) {
             Alert.alert('Error', 'Por favor selecciona una carrera sugerida de la lista.');
             return;
+        }
+
+        if (currentSemester.trim() !== '') {
+            const sem = parseInt(currentSemester, 10);
+            if (isNaN(sem) || sem < 0 || sem > 10) {
+                Alert.alert('Error', 'El semestre debe ser un número entre 0 y 10.');
+                return;
+            }
         }
 
         try {
@@ -247,11 +261,12 @@ export default function ProfileEditScreen() {
                         // Optional: clear subjects when changing career
                     }}
                     onFocus={() => setShowCarreras(true)}
-                    placeholder="Ej: Ingeniería de Sistemas"
+                    onBlur={() => setTimeout(() => setShowCarreras(false), 200)}
+                    placeholder="Selecciona tu carrera"
                     placeholderTextColor="#94a3b8"
                 />
                 {showCarreras && filteredCarreras.length > 0 && (
-                    <View style={styles.suggestionsContainer}>
+                    <ScrollView nestedScrollEnabled={true} style={styles.suggestionsContainer}>
                         {filteredCarreras.map((item, index) => (
                             <Pressable
                                 key={index}
@@ -269,23 +284,32 @@ export default function ProfileEditScreen() {
                                 <Text style={styles.suggestionText}>{item}</Text>
                             </Pressable>
                         ))}
-                    </View>
+                    </ScrollView>
                 )}
             </View>
 
             <Text style={styles.label}>Semestre actual</Text>
             <TextInput
-                style={styles.input}
+                style={[
+                    styles.input, 
+                    currentSemester !== '' && (parseInt(currentSemester, 10) < 0 || parseInt(currentSemester, 10) > 10) ? { borderColor: '#ef4444' } : null
+                ]}
                 value={currentSemester}
-                onChangeText={setCurrentSemester}
+                onChangeText={(text) => {
+                    const numeric = text.replace(/[^0-9]/g, '');
+                    setCurrentSemester(numeric);
+                }}
                 placeholder="Ej: 5"
                 keyboardType="numeric"
                 placeholderTextColor="#94a3b8"
             />
+            {currentSemester !== '' && (parseInt(currentSemester, 10) < 0 || parseInt(currentSemester, 10) > 10) && (
+                <Text style={styles.errorText}>El semestre debe ser un número entre 0 y 10</Text>
+            )}
 
             <View style={{ zIndex: 9 }}>
                 <Text style={styles.label}>Materias inscritas</Text>
-                
+
                 {!career ? (
                     <Text style={styles.infoText}>Selecciona tu carrera primero</Text>
                 ) : (!isSistemas ? (
@@ -302,18 +326,21 @@ export default function ProfileEditScreen() {
                                 setShowSubjects(true);
                             }}
                             onFocus={() => setShowSubjects(true)}
+                            onBlur={() => setTimeout(() => setShowSubjects(false), 200)}
                             placeholder="Buscar materia..."
                             placeholderTextColor="#94a3b8"
                         />
-                        <Pressable style={styles.addButton} onPress={handleAddSubject}>
-                            <Text style={styles.addButtonLabel}>Añadir</Text>
-                        </Pressable>
+                        {!isSistemas && (
+                            <Pressable style={styles.addButton} onPress={handleAddSubject}>
+                                <Text style={styles.addButtonLabel}>Añadir</Text>
+                            </Pressable>
+                        )}
                     </View>
                 ) : null}
 
                 {showSubjects && isSistemas && filteredSubjects.length > 0 && (
-                    <View style={[styles.suggestionsContainer, { top: 70 }]}>
-                        {filteredSubjects.slice(0, 15).map((item, index) => (
+                    <ScrollView nestedScrollEnabled={true} style={[styles.suggestionsContainer, { top: 70 }]}>
+                        {filteredSubjects.slice(0, 50).map((item, index) => (
                             <Pressable
                                 key={index}
                                 style={styles.suggestionItem}
@@ -327,7 +354,7 @@ export default function ProfileEditScreen() {
                                 <Text style={styles.suggestionText}>{item}</Text>
                             </Pressable>
                         ))}
-                    </View>
+                    </ScrollView>
                 )}
             </View>
 
@@ -394,6 +421,13 @@ const styles = StyleSheet.create({
         fontSize: 13,
         marginBottom: 12,
         fontStyle: 'italic',
+    },
+    errorText: {
+        color: '#ef4444',
+        fontSize: 13,
+        marginTop: -12,
+        marginBottom: 16,
+        marginLeft: 4,
     },
     input: {
         backgroundColor: '#ffffff',

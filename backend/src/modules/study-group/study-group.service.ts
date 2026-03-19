@@ -1,6 +1,6 @@
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../errors/app-error.js';
-import type { CreateStudyGroupInput, UpdateStudyGroupInput, AddMembersInput } from './study-group.schemas.js';
+import type { CreateStudyGroupInput, UpdateStudyGroupInput, AddMembersInput, CreateResourceInput } from './study-group.schemas.js';
 
 export async function createStudyGroup(ownerId: string, data: CreateStudyGroupInput, payload?: any) {
     let dbOwnerId = ownerId;
@@ -193,5 +193,68 @@ export async function removeMemberFromGroup(groupId: string, ownerId: string, me
             owner: { select: { id: true, name: true, email: true } },
             members: { select: { id: true, name: true, email: true, career: true, currentSemester: true } },
         }
+    });
+}
+
+export async function addStudyGroupResource(groupId: string, uploaderId: string, data: CreateResourceInput, payload?: any) {
+    let dbUploaderId = uploaderId;
+    if (payload && payload.email) {
+        const existing = await prisma.user.findUnique({ where: { email: payload.email }, select: { id: true } });
+        if (existing) dbUploaderId = existing.id;
+    }
+
+    const group = await prisma.studyGroup.findFirst({
+        where: { id: groupId, members: { some: { id: dbUploaderId } } }
+    });
+
+    if (!group) throw new AppError(403, 'Debes ser miembro del grupo para añadir recursos');
+
+    return prisma.studyGroupResource.create({
+        data: {
+            groupId,
+            uploaderId: dbUploaderId,
+            title: data.title,
+            type: data.type,
+            url: data.url || ''
+        }
+    });
+}
+
+export async function deleteStudyGroupResource(groupId: string, resourceId: string, userId: string, payload?: any) {
+    let dbUserId = userId;
+    if (payload && payload.email) {
+        const existing = await prisma.user.findUnique({ where: { email: payload.email }, select: { id: true } });
+        if (existing) dbUserId = existing.id;
+    }
+
+    const group = await prisma.studyGroup.findUnique({ where: { id: groupId } });
+    if (!group) throw new AppError(404, 'Grupo de estudio no encontrado');
+
+    const resource = await prisma.studyGroupResource.findUnique({ where: { id: resourceId } });
+    if (!resource) throw new AppError(404, 'Recurso no encontrado');
+
+    if (group.ownerId !== dbUserId && resource.uploaderId !== dbUserId) {
+        throw new AppError(403, 'Solo el autor o el administrador pueden eliminar este recurso');
+    }
+
+    return prisma.studyGroupResource.delete({ where: { id: resourceId } });
+}
+
+export async function getStudyGroupResources(groupId: string, userId: string, payload?: any) {
+    let dbUserId = userId;
+    if (payload && payload.email) {
+        const existing = await prisma.user.findUnique({ where: { email: payload.email }, select: { id: true } });
+        if (existing) dbUserId = existing.id;
+    }
+
+    const group = await prisma.studyGroup.findFirst({
+        where: { id: groupId, members: { some: { id: dbUserId } } }
+    });
+
+    if (!group) throw new AppError(403, 'Debes ser miembro del grupo para ver los recursos');
+
+    return prisma.studyGroupResource.findMany({
+        where: { groupId },
+        orderBy: { createdAt: 'desc' }
     });
 }

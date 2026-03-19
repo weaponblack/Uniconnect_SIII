@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View, Modal, Platform } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View, Modal, Platform, Keyboard } from 'react-native';
 import { useToast } from '@/components/Toast';
 import { Stack, router, useFocusEffect } from 'expo-router';
 import { loadSession, type SessionData } from '@/lib/session';
@@ -11,9 +11,17 @@ import {
     removeMemberFromStudyGroup,
     searchStudentsByName,
     deleteStudyGroup,
+    getStudyGroupResources,
+    addStudyGroupResource,
+    deleteStudyGroupResource,
     type StudyGroup,
-    type StudyGroupMember
+    type StudyGroupMember,
+    type StudyGroupResource
 } from '@/lib/study-group-api';
+import { authConfig } from '@/constants/AuthConfig';
+import * as DocumentPicker from 'expo-document-picker';
+import * as Linking from 'expo-linking';
+import { Ionicons } from '@expo/vector-icons';
 
 export default function StudyGroupsScreen() {
     const { showToast } = useToast();
@@ -41,6 +49,27 @@ export default function StudyGroupsScreen() {
     const [editInfoDesc, setEditInfoDesc] = useState('');
     const [isUpdatingInfo, setIsUpdatingInfo] = useState(false);
 
+    // Resources state
+    const [resources, setResources] = useState<StudyGroupResource[]>([]);
+    const [isLoadingResources, setIsLoadingResources] = useState(false);
+    const [isResourceModalVisible, setResourceModalVisible] = useState(false);
+    const [resourceType, setResourceType] = useState<'PDF' | 'LINK'>('PDF');
+    const [resourceTitle, setResourceTitle] = useState('');
+    const [resourceLink, setResourceLink] = useState('');
+    const [isUploadingResource, setIsUploadingResource] = useState(false);
+
+    const loadResources = async (groupId: string) => {
+        setIsLoadingResources(true);
+        try {
+            const data = await getStudyGroupResources(groupId);
+            setResources(data);
+        } catch (error) {
+            console.error('Failed to load resources', error);
+        } finally {
+            setIsLoadingResources(false);
+        }
+    };
+
     useFocusEffect(
         useCallback(() => {
             async function fetchGroups() {
@@ -66,7 +95,7 @@ export default function StudyGroupsScreen() {
     const handleCreateGroup = async () => {
         const trimmedName = newGroupName.trim();
         if (!trimmedName) return;
-        
+
         if (trimmedName.length < 3) {
             showToast('El nombre del grupo debe tener al menos 3 caracteres', 'error');
             return;
@@ -226,10 +255,83 @@ export default function StudyGroupsScreen() {
         }
     };
 
+    const handleAddResource = async () => {
+        if (!editingGroup) return;
+        if (!resourceTitle.trim()) {
+            showToast('El título es obligatorio', 'error');
+            return;
+        }
+
+        try {
+            setIsUploadingResource(true);
+            const formData = new FormData();
+            formData.append('title', resourceTitle.trim());
+            formData.append('type', resourceType);
+
+            if (resourceType === 'LINK') {
+                if (!resourceLink.trim()) {
+                    showToast('El enlace es obligatorio', 'error');
+                    setIsUploadingResource(false);
+                    return;
+                }
+                formData.append('url', resourceLink.trim());
+            } else {
+                // Pick Document
+                const result = await DocumentPicker.getDocumentAsync({
+                    type: 'application/pdf',
+                    copyToCacheDirectory: true,
+                });
+
+                if (result.canceled || !result.assets || result.assets.length === 0) {
+                    showToast('Selección de archivo cancelada', 'error');
+                    setIsUploadingResource(false);
+                    return;
+                }
+
+                const file = result.assets[0];
+                if (Platform.OS === 'web' && file.file) {
+                    // On Web, DocumentPicker provides the native File object inside the asset.
+                    formData.append('file', file.file);
+                } else {
+                    // On Mobile (iOS/Android), use the react-native polyfill format.
+                    formData.append('file', {
+                        uri: Platform.OS === 'android' ? file.uri : file.uri.replace('file://', ''),
+                        name: file.name,
+                        type: file.mimeType || 'application/pdf',
+                    } as any);
+                }
+            }
+
+            const newResource = await addStudyGroupResource(editingGroup.id, formData);
+            setResources([newResource, ...resources]);
+            setResourceModalVisible(false);
+            setResourceTitle('');
+            setResourceLink('');
+            showToast('Recurso añadido', 'success');
+        } catch (error) {
+            console.error('Resource upload fail', error);
+            showToast('No se pudo subir el recurso', 'error');
+        } finally {
+            setIsUploadingResource(false);
+        }
+    };
+
     if (isLoading || !session) {
         return (
             <View style={styles.loaderContainer}>
-                <Stack.Screen options={{ title: 'Grupos de Estudio' }} />
+                <Stack.Screen 
+                    options={{ 
+                        title: 'Grupos de Estudio',
+                        headerLeft: () => (
+                            <Pressable 
+                                onPress={() => router.replace('/dashboard')}
+                                style={{ padding: 8, marginLeft: Platform.OS === 'ios' ? -8 : 0, flexDirection: 'row', alignItems: 'center' }}
+                            >
+                                <Ionicons name={Platform.OS === 'ios' ? "chevron-back" : "arrow-back"} size={26} color="#ffffff" />
+                            </Pressable>
+                        )
+                    }} 
+                />
                 <ActivityIndicator />
                 <Text style={styles.loaderText}>Cargando grupos...</Text>
             </View>
@@ -239,10 +341,20 @@ export default function StudyGroupsScreen() {
     if (editingGroup) {
         // Edit mode UI
         return (
-            <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-                <Pressable onPress={() => { setEditingGroup(null); setSearchQuery(''); setSearchResults([]); }} style={styles.backButton}>
-                    <Text style={styles.backButtonText}>← Volver a mis grupos</Text>
-                </Pressable>
+            <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer} keyboardShouldPersistTaps="handled">
+                <Stack.Screen 
+                    options={{ 
+                        title: 'Gestionar Grupo',
+                        headerLeft: () => (
+                            <Pressable 
+                                onPress={() => { setEditingGroup(null); setSearchQuery(''); setSearchResults([]); }}
+                                style={{ padding: 8, marginLeft: Platform.OS === 'ios' ? -8 : 0, flexDirection: 'row', alignItems: 'center' }}
+                            >
+                                <Ionicons name={Platform.OS === 'ios' ? "chevron-back" : "arrow-back"} size={26} color="#ffffff" />
+                            </Pressable>
+                        )
+                    }} 
+                />
 
                 {session.user.id === editingGroup.ownerId ? (
                     <View style={styles.card}>
@@ -263,11 +375,11 @@ export default function StudyGroupsScreen() {
                             multiline
                         />
                         <Pressable
-                            style={[styles.saveModalButton, { paddingVertical: 12, borderRadius: 8 }, isUpdatingInfo && { opacity: 0.6 }]}
+                            style={[styles.saveChangesButton, isUpdatingInfo && { opacity: 0.6 }]}
                             onPress={handleUpdateGroupInfo}
                             disabled={isUpdatingInfo}
                         >
-                            <Text style={styles.saveModalButtonText}>
+                            <Text style={styles.saveChangesButtonText}>
                                 {isUpdatingInfo ? 'Guardando...' : 'Guardar Cambios'}
                             </Text>
                         </Pressable>
@@ -278,6 +390,61 @@ export default function StudyGroupsScreen() {
                         <Text style={styles.subtitle}>{editingGroup.description || 'Sin descripción'}</Text>
                     </>
                 )}
+
+                <View style={styles.card}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                        <Text style={[styles.cardTitle, { marginBottom: 0 }]}>Recursos Compartidos</Text>
+                        <Pressable style={styles.addResourceButton} onPress={() => setResourceModalVisible(true)}>
+                            <Text style={styles.addResourceButtonText}>+ Añadir</Text>
+                        </Pressable>
+                    </View>
+
+                    {isLoadingResources ? (
+                        <ActivityIndicator />
+                    ) : resources.length === 0 ? (
+                        <Text style={styles.emptyText}>No hay recursos en este grupo</Text>
+                    ) : (
+                        resources.map(res => (
+                            <View key={res.id} style={styles.resourceItem}>
+                                <View style={styles.resourceIconContainer}>
+                                    <Ionicons name={res.type === 'PDF' ? "document-text" : "link"} size={24} color="#003e70" />
+                                </View>
+                                <View style={{ flex: 1, marginLeft: 12 }}>
+                                    <Text style={styles.resourceTitle}>{res.title}</Text>
+                                    <View style={{ flexDirection: 'row', gap: 6, marginTop: 4 }}>
+                                        <Text style={styles.resourceType}>{res.type}</Text>
+                                        <Text style={styles.resourceDate}>{new Date(res.createdAt).toLocaleDateString()}</Text>
+                                    </View>
+                                </View>
+                                <Pressable
+                                    style={styles.openResourceButton}
+                                    onPress={() => {
+                                        const finalUrl = res.url.startsWith('/') ? `${authConfig.backendUrl}${res.url}` : res.url;
+                                        Linking.openURL(finalUrl);
+                                    }}
+                                >
+                                    <Text style={styles.openResourceButtonText}>Abrir</Text>
+                                </Pressable>
+                                {((session?.user.id === res.uploaderId) || (session?.user.id === editingGroup.ownerId)) && (
+                                    <Pressable
+                                        style={styles.deleteResourceButton}
+                                        onPress={async () => {
+                                            try {
+                                                await deleteStudyGroupResource(editingGroup.id, res.id);
+                                                setResources(resources.filter(r => r.id !== res.id));
+                                                showToast('Recurso eliminado', 'success');
+                                            } catch (e) {
+                                                showToast('Error al eliminar', 'error');
+                                            }
+                                        }}
+                                    >
+                                        <Ionicons name="trash-outline" size={20} color="#ef4444" />
+                                    </Pressable>
+                                )}
+                            </View>
+                        ))
+                    )}
+                </View>
 
                 <View style={styles.card}>
                     <Text style={styles.cardTitle}>Miembros actuales ({editingGroup.members.length})</Text>
@@ -325,7 +492,7 @@ export default function StudyGroupsScreen() {
                         </View>
 
                         {searchResults.length > 0 && (
-                            <View style={styles.searchResults}>
+                            <ScrollView style={styles.searchResults} nestedScrollEnabled={true}>
                                 {searchResults.map((student) => (
                                     <View key={student.id} style={styles.resultItem}>
                                         <View style={{ flex: 1 }}>
@@ -341,7 +508,7 @@ export default function StudyGroupsScreen() {
                                         </Pressable>
                                     </View>
                                 ))}
-                            </View>
+                            </ScrollView>
                         )}
                         {searchResults.length === 0 && searchQuery.trim() !== '' && !isSearching && (
                             <Text style={styles.noResultsText}>No se encontraron resultados nuevos.</Text>
@@ -360,6 +527,79 @@ export default function StudyGroupsScreen() {
                         </Text>
                     </Pressable>
                 )}
+
+                {/* Resource Modal */}
+                <Modal
+                    visible={isResourceModalVisible}
+                    animationType="slide"
+                    transparent={true}
+                    onRequestClose={() => setResourceModalVisible(false)}
+                >
+                    <View style={styles.modalOverlay}>
+                        <View style={styles.modalContent}>
+                            <Text style={styles.modalTitle}>Añadir Recurso</Text>
+
+                            <View style={styles.typeSelector}>
+                                <Pressable
+                                    style={[styles.typeButton, resourceType === 'PDF' && styles.typeButtonActive]}
+                                    onPress={() => setResourceType('PDF')}
+                                >
+                                    <Text style={[styles.typeButtonText, resourceType === 'PDF' && styles.typeButtonTextActive]}>Archivo PDF</Text>
+                                </Pressable>
+                                <Pressable
+                                    style={[styles.typeButton, resourceType === 'LINK' && styles.typeButtonActive]}
+                                    onPress={() => setResourceType('LINK')}
+                                >
+                                    <Text style={[styles.typeButtonText, resourceType === 'LINK' && styles.typeButtonTextActive]}>Enlace Web</Text>
+                                </Pressable>
+                            </View>
+
+                            <Text style={styles.label}>Título</Text>
+                            <TextInput
+                                style={styles.input}
+                                value={resourceTitle}
+                                onChangeText={setResourceTitle}
+                                placeholder={resourceType === 'PDF' ? "Ej: Apuntes Tema 1" : "Ej: Video explicativo"}
+                                placeholderTextColor="#94a3b8"
+                            />
+
+                            {resourceType === 'LINK' && (
+                                <>
+                                    <Text style={styles.label}>URL del enlace</Text>
+                                    <TextInput
+                                        style={styles.input}
+                                        value={resourceLink}
+                                        onChangeText={setResourceLink}
+                                        placeholder="https://..."
+                                        placeholderTextColor="#94a3b8"
+                                        autoCapitalize="none"
+                                        keyboardType="url"
+                                    />
+                                </>
+                            )}
+                            {resourceType === 'PDF' && (
+                                <Text style={styles.subtitle}>Al presionar 'Añadir', se abrirá el explorador de archivos para escoger tu PDF.</Text>
+                            )}
+
+                            <View style={styles.modalActions}>
+                                <Pressable
+                                    style={[styles.modalButton, styles.cancelModalButton]}
+                                    onPress={() => setResourceModalVisible(false)}
+                                    disabled={isUploadingResource}
+                                >
+                                    <Text style={styles.cancelModalButtonText}>Cancelar</Text>
+                                </Pressable>
+                                <Pressable
+                                    style={[styles.modalButton, styles.saveModalButton]}
+                                    onPress={handleAddResource}
+                                    disabled={isUploadingResource}
+                                >
+                                    <Text style={styles.saveModalButtonText}>{isUploadingResource ? 'Procesando...' : 'Añadir'}</Text>
+                                </Pressable>
+                            </View>
+                        </View>
+                    </View>
+                </Modal>
             </ScrollView>
         );
     }
@@ -367,11 +607,20 @@ export default function StudyGroupsScreen() {
     // List mode UI
     return (
         <View style={styles.container}>
-            <Stack.Screen options={{ title: 'Grupos de Estudio' }} />
+            <Stack.Screen 
+                options={{ 
+                    title: 'Grupos de Estudio',
+                    headerLeft: () => (
+                        <Pressable 
+                            onPress={() => router.replace('/dashboard')}
+                            style={{ padding: 8, marginLeft: Platform.OS === 'ios' ? -8 : 0, flexDirection: 'row', alignItems: 'center' }}
+                        >
+                            <Ionicons name={Platform.OS === 'ios' ? "chevron-back" : "arrow-back"} size={26} color="#ffffff" />
+                        </Pressable>
+                    )
+                }} 
+            />
             <View style={styles.header}>
-                <Pressable onPress={() => router.back()} style={styles.backButtonOnly}>
-                    <Text style={styles.backButtonText}>← Atrás</Text>
-                </Pressable>
                 <Text style={styles.title}>Grupos de Estudio</Text>
                 <Text style={styles.subtitle}>Tus grupos actuales</Text>
             </View>
@@ -400,6 +649,7 @@ export default function StudyGroupsScreen() {
                                         setEditingGroup(group);
                                         setEditInfoName(group.name);
                                         setEditInfoDesc(group.description || '');
+                                        loadResources(group.id);
                                     }}
                                 >
                                     <Text style={styles.manageButtonText}>{isOwner ? 'Gestionar' : 'Ver grupo'}</Text>
@@ -567,8 +817,8 @@ const styles = StyleSheet.create({
         paddingHorizontal: 8,
         paddingVertical: 4,
         borderRadius: 6,
-        marginLeft: 8,
-        width: 80,
+        marginTop: 8,
+        alignSelf: 'flex-start',
     },
     ownerBadgeText: {
         color: '#1d4ed8',
@@ -681,6 +931,19 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         fontSize: 15,
     },
+    saveChangesButton: {
+        backgroundColor: '#003e70',
+        paddingVertical: 14,
+        borderRadius: 12,
+        alignItems: 'center',
+        marginTop: 16,
+        marginBottom: 8,
+    },
+    saveChangesButtonText: {
+        color: '#ffffff',
+        fontSize: 16,
+        fontWeight: '700',
+    },
     card: {
         backgroundColor: '#ffffff',
         borderRadius: 12,
@@ -730,7 +993,13 @@ const styles = StyleSheet.create({
         fontWeight: '600',
     },
     searchResults: {
-        marginTop: 8,
+        marginTop: 12,
+        maxHeight: 220,
+        backgroundColor: '#ffffff',
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#e2e8f0',
+        paddingHorizontal: 8,
     },
     resultItem: {
         flexDirection: 'row',
@@ -780,5 +1049,89 @@ const styles = StyleSheet.create({
         color: '#dc2626',
         fontWeight: '700',
         fontSize: 15,
+    },
+    addResourceButton: {
+        backgroundColor: '#f1f5f9',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 8,
+    },
+    addResourceButtonText: {
+        color: '#003e70',
+        fontWeight: '600',
+        fontSize: 13,
+    },
+    resourceItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: '#f1f5f9',
+    },
+    resourceIconContainer: {
+        backgroundColor: '#e0f2fe',
+        padding: 8,
+        borderRadius: 8,
+    },
+    resourceTitle: {
+        fontSize: 15,
+        fontWeight: '600',
+        color: '#0f172a',
+    },
+    resourceType: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: '#003e70',
+        backgroundColor: '#e2e8f0',
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 4,
+        overflow: 'hidden',
+    },
+    resourceDate: {
+        fontSize: 12,
+        color: '#64748b',
+        marginTop: 2,
+    },
+    openResourceButton: {
+        backgroundColor: '#e2e8f0',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 6,
+        marginRight: 8,
+    },
+    openResourceButtonText: {
+        color: '#0f172a',
+        fontWeight: '600',
+        fontSize: 12,
+    },
+    deleteResourceButton: {
+        padding: 6,
+        backgroundColor: '#fee2e2',
+        borderRadius: 6,
+    },
+    typeSelector: {
+        flexDirection: 'row',
+        gap: 12,
+        marginBottom: 16,
+    },
+    typeButton: {
+        flex: 1,
+        paddingVertical: 10,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#cbd5e1',
+        alignItems: 'center',
+    },
+    typeButtonActive: {
+        backgroundColor: '#003e70',
+        borderColor: '#003e70',
+    },
+    typeButtonText: {
+        color: '#475569',
+        fontWeight: '600',
+    },
+    typeButtonTextActive: {
+        color: '#ffffff',
     },
 });

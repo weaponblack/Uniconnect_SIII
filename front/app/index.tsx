@@ -74,7 +74,7 @@ export default function LandingScreen() {
       </Text>
 
       <Link href="/signup" style={styles.primaryButton}>
-        Crear cuenta
+        Iniciar Sesión
       </Link>
       <Link href="/dashboard" style={styles.secondaryButton}>
         Ir al dashboard demo
