@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View, Modal, Platform, Keyboard } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View, Modal, Platform, Keyboard, KeyboardAvoidingView } from 'react-native';
 import { useToast } from '@/components/Toast';
 import { Stack, router, useFocusEffect } from 'expo-router';
 import { loadSession, type SessionData } from '@/lib/session';
@@ -341,7 +341,12 @@ export default function StudyGroupsScreen() {
     if (editingGroup) {
         // Edit mode UI
         return (
-            <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer} keyboardShouldPersistTaps="handled">
+            <KeyboardAvoidingView
+                style={{ flex: 1 }}
+                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+            >
+                <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer} keyboardShouldPersistTaps="handled">
                 <Stack.Screen 
                     options={{ 
                         title: 'Gestionar Grupo',
@@ -492,7 +497,7 @@ export default function StudyGroupsScreen() {
                         </View>
 
                         {searchResults.length > 0 && (
-                            <ScrollView style={styles.searchResults} nestedScrollEnabled={true}>
+                            <ScrollView style={styles.searchResults} nestedScrollEnabled={true} keyboardShouldPersistTaps="handled">
                                 {searchResults.map((student) => (
                                     <View key={student.id} style={styles.resultItem}>
                                         <View style={{ flex: 1 }}>
@@ -535,7 +540,11 @@ export default function StudyGroupsScreen() {
                     transparent={true}
                     onRequestClose={() => setResourceModalVisible(false)}
                 >
-                    <View style={styles.modalOverlay}>
+                    <KeyboardAvoidingView
+                        style={{ flex: 1 }}
+                        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                    >
+                        <View style={styles.modalOverlay}>
                         <View style={styles.modalContent}>
                             <Text style={styles.modalTitle}>Añadir Recurso</Text>
 
@@ -599,8 +608,10 @@ export default function StudyGroupsScreen() {
                             </View>
                         </View>
                     </View>
+                    </KeyboardAvoidingView>
                 </Modal>
             </ScrollView>
+            </KeyboardAvoidingView>
         );
     }
 
@@ -673,7 +684,11 @@ export default function StudyGroupsScreen() {
                 transparent={true}
                 onRequestClose={() => setCreateModalVisible(false)}
             >
-                <View style={styles.modalOverlay}>
+                <KeyboardAvoidingView
+                    style={{ flex: 1 }}
+                    behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                >
+                    <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
                         <Text style={styles.modalTitle}>Crear nuevo grupo</Text>
 
@@ -712,9 +727,10 @@ export default function StudyGroupsScreen() {
                             >
                                 <Text style={styles.saveModalButtonText}>{isCreating ? 'Creando...' : 'Crear'}</Text>
                             </Pressable>
+                            </View>
                         </View>
                     </View>
-                </View>
+                </KeyboardAvoidingView>
             </Modal>
         </View>
     );

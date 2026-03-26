@@ -4,7 +4,6 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Image } from 'react-native';
 import 'react-native-reanimated';
-import { Auth0Provider } from 'react-native-auth0';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
 import ErrorBoundary from '@/components/ErrorBoundary';
@@ -24,11 +23,7 @@ export default function RootLayout() {
   return (
     <ErrorBoundary>
       <ToastProvider>
-        <Auth0Provider
-          domain={process.env.EXPO_PUBLIC_AUTH0_DOMAIN || ''}
-          clientId={process.env.EXPO_PUBLIC_AUTH0_CLIENT_ID || ''}
-        >
-          <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
             <Stack
               screenOptions={{
                 headerStyle: { backgroundColor: '#003e70' },
@@ -50,7 +45,6 @@ export default function RootLayout() {
             </Stack>
             <StatusBar style="auto" />
           </ThemeProvider>
-        </Auth0Provider>
       </ToastProvider>
     </ErrorBoundary>
   );

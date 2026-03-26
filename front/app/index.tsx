@@ -1,68 +1,25 @@
 import { Link, router, useFocusEffect } from 'expo-router';
 import { Image, StyleSheet, Text, View } from 'react-native';
-import { useAuth0 } from 'react-native-auth0';
 import { useCallback } from 'react';
-import { saveSession } from '@/lib/session';
+import { saveSession, loadSession } from '@/lib/session';
 
 export default function LandingScreen() {
-  const { user, getCredentials } = useAuth0();
-
   useFocusEffect(
     useCallback(() => {
-      // Solo actuar si Auth0 tiene sesión iniciada al ENFOCAR esta pantalla root
-      if (user) {
-        // En Web, Auth0 hace un redirect de página completa.
-        // Por ende, debemos atrapar y guardar la sesión aquí al volver.
-        const syncSession = async () => {
-          try {
-            const credentials = await getCredentials();
-            if (credentials?.idToken) {
-              // Save temporary session to allow API calls
-              await saveSession({
-                user: {
-                  id: user?.sub || 'temp-id',
-                  name: user?.name || null,
-                  email: user?.email || '',
-                  role: 'student',
-                  avatarUrl: user?.picture || null
-                },
-                accessToken: credentials.idToken,
-                refreshToken: credentials.accessToken || ''
-              });
-
-              // Fetch real profile from backend to get internal ID and Role
-              try {
-                const { getStudentProfile } = await import('@/lib/student-api');
-                const profile = await getStudentProfile();
-                
-                await saveSession({
-                  user: {
-                    id: profile.id,
-                    name: profile.name,
-                    email: profile.email,
-                    role: (profile as any).role || 'student',
-                    avatarUrl: profile.avatarUrl
-                  },
-                  accessToken: credentials.idToken,
-                  refreshToken: credentials.accessToken || ''
-                });
-              } catch (profileError) {
-                console.error("No se pudo sincronizar el perfil con el backend", profileError);
-              }
-            }
-          } catch (e) {
-            console.error("No se pudo obtener las credenciales web", e);
-          } finally {
-            setTimeout(() => {
-              router.replace('/dashboard');
-            }, 100);
+      // Si ya hay una sesión guardada localmente, redirigir al dashboard
+      const checkSession = async () => {
+        try {
+          const session = await loadSession();
+          if (session?.accessToken) {
+            router.replace('/dashboard');
           }
-        };
-
-        syncSession();
-      }
-    }, [user, getCredentials])
-  );  return (
+        } catch (e) {
+          // No hay sesión guardada, quedarse en index
+        }
+      };
+      checkSession();
+    }, [])
+  ); return (
     <View style={styles.container}>
       <View style={styles.logoContainer}>
         <Image source={require('../assets/images/LogoUC.png')} style={styles.logo} />
@@ -123,7 +80,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   primaryButton: {
-    backgroundColor: '#003e70',
+    backgroundColor: '#045389',
     color: '#ffffff',
     textAlign: 'center',
     paddingVertical: 14,

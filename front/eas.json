@@ -12,13 +12,15 @@
       },
       "ios": {
         "image": "latest"
-      }
+      },
+      "channel": "development"
     },
     "development-simulator": {
       "extends": "development",
       "ios": {
         "simulator": true
-      }
+      },
+      "channel": "development-simulator"
     },
     "preview": {
       "distribution": "internal",
@@ -28,6 +30,22 @@
       },
       "ios": {
         "image": "latest"
+      }
+    },
+    "casa": {
+      "channel": "casa",
+      "env": {
+        "EXPO_PUBLIC_BACKEND_URL": "http://192.168.20.203:4000"
+      },
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "anterior": {
+      "extends": "preview",
+      "channel": "anterior",
+      "env": {
+        "EXPO_PUBLIC_BACKEND_URL": "http://192.168.38.234:4000"
       }
     },
     "production": {
