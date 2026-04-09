@@ -1,33 +1,137 @@
-import { useState, useEffect } from 'react';
+﻿import { useEffect, useMemo, useState } from 'react';
 import { router } from 'expo-router';
-import { Alert, Pressable, StyleSheet, Text, View, TextInput, Image, ActivityIndicator, Platform } from 'react-native';
-import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
+import * as WebBrowser from 'expo-web-browser';
+import * as Google from 'expo-auth-session/providers/google.js';
+import { makeRedirectUri } from 'expo-auth-session';
+import { Alert, Platform, Pressable, StyleSheet, Text, View, TextInput, ScrollView } from 'react-native';
+import Constants from 'expo-constants';
+import { authConfig, validateAuthConfig } from '@/constants/AuthConfig';
 import { saveSession } from '@/lib/session';
-import { signInSimple } from '@/lib/auth-api';
-import { useGoogleAuth } from '@/hooks/useGoogleAuth';
+import { signInWithGoogleIdToken, signInSimple } from '@/lib/auth-api';
+
+WebBrowser.maybeCompleteAuthSession();
 
 export default function SignUpScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [statusText, setStatusText] = useState<string>('');
-  const [loginMethod, setLoginMethod] = useState<'simple' | 'google'>('simple');
+  const [loginMethod, setLoginMethod] = useState<'google' | 'simple'>('simple');
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
+  
+  const missingConfig = useMemo(
+    () => validateAuthConfig(Platform.OS as 'web' | 'android' | 'ios'),
+    []
+  );
+  const appOwnership = Constants.appOwnership;
+  const isExpoGo = appOwnership === 'expo';
+  const redirectUri = useMemo(
+    () => {
+      if (Platform.OS === 'web') {
+        return makeRedirectUri({
+          path: 'oauth',
+        });
+      }
 
-  const { user: googleUser, error: googleError, loading: googleLoading, request, signIn } = useGoogleAuth();
+      return makeRedirectUri({
+        scheme: authConfig.scheme,
+        path: 'oauth',
+      });
+    },
+    []
+  );
 
-  // Navegar al dashboard cuando el login de Google sea exitoso
+  const [request, response, promptAsync] = Google.useIdTokenAuthRequest(
+    {
+      webClientId: authConfig.googleWebClientId || undefined,
+      iosClientId: Platform.OS === 'ios' ? authConfig.googleIosClientId || undefined : undefined,
+      androidClientId:
+        Platform.OS === 'android' ? authConfig.googleAndroidClientId || undefined : undefined,
+      selectAccount: true,
+      extraParams: {
+        prompt: 'select_account consent',
+        ...(authConfig.googleHostedDomain ? { hd: authConfig.googleHostedDomain } : {}),
+      },
+      redirectUri,
+    },
+    Platform.OS === 'web' ? {} : { native: redirectUri }
+  );
+
   useEffect(() => {
-    if (googleUser) {
-      router.replace('/dashboard');
-    }
-  }, [googleUser]);
+    async function handleResponse() {
+      if (!response) {
+        return;
+      }
 
-  // Mostrar error de Google si ocurre
-  useEffect(() => {
-    if (googleError) {
-      Alert.alert('Error de Google', googleError);
+      if (response.type === 'error') {
+        const authError =
+          typeof response.error?.message === 'string'
+            ? response.error.message
+            : 'Google devolvio un error de autenticacion.';
+        setStatusText(`Google error: ${authError}`);
+        Alert.alert('Error de Google', authError);
+        return;
+      }
+
+      if (response?.type !== 'success') {
+        setStatusText(`OAuth response: ${response.type}`);
+        return;
+      }
+
+      const possibleResponse = response as unknown as {
+        params?: { id_token?: string; idToken?: string };
+        authentication?: { idToken?: string | null };
+      };
+      const idToken =
+        possibleResponse.params?.id_token ??
+        possibleResponse.params?.idToken ??
+        possibleResponse.authentication?.idToken ??
+        '';
+
+      if (!idToken) {
+        setStatusText('Google no devolvio idToken en la respuesta.');
+        Alert.alert('Error', 'Google no devolvio idToken.');
+        setIsSubmitting(false);
+        return;
+      }
+
+      try {
+        setIsSubmitting(true);
+        setStatusText('Validando token con backend...');
+        const session = await signInWithGoogleIdToken(idToken);
+        await saveSession(session);
+        setStatusText('Login OK, redirigiendo a dashboard...');
+        router.replace('/dashboard');
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'No se pudo iniciar sesion.';
+        setStatusText(`Backend error: ${message}`);
+        Alert.alert('Error de autenticacion', message);
+      } finally {
+        setIsSubmitting(false);
+      }
     }
-  }, [googleError]);
+
+    void handleResponse();
+  }, [response]);
+
+  function handleGoogleSignup() {
+    if (missingConfig.length > 0) {
+      Alert.alert(
+        'Configuracion incompleta',
+        `Faltan variables en front/.env: ${missingConfig.join(', ')}`
+      );
+      return;
+    }
+
+    if (isExpoGo && Platform.OS !== 'web') {
+      Alert.alert(
+        'Development Build requerido',
+        'Para Android/iOS debes probar Google Sign-In en un development build, no en Expo Go.'
+      );
+      return;
+    }
+
+    void promptAsync();
+  }
 
   async function handleSimpleSignIn() {
     if (!email.trim()) {
@@ -56,17 +160,8 @@ export default function SignUpScreen() {
   }
 
   return (
-    <KeyboardAwareScrollView
-      style={{ flex: 1 }}
-      contentContainerStyle={styles.container}
-      enableOnAndroid={true}
-      extraScrollHeight={20}
-      keyboardShouldPersistTaps="handled"
-    >
-      <View style={styles.logoContainer}>
-        <Text style={styles.logoText}>UniConnect</Text>
-      </View>
-      <Text style={styles.title}>Iniciar Sesión</Text>
+    <ScrollView contentContainerStyle={styles.container}>
+      <Text style={styles.title}>Crear cuenta</Text>
       <Text style={styles.subtitle}>Usa tu correo para acceder a UniConnect.</Text>
 
       <View style={styles.methodSelector}>
@@ -98,33 +193,7 @@ export default function SignUpScreen() {
         </Pressable>
       </View>
 
-      {loginMethod === 'google' ? (
-        <>
-          {/* Botón directo de Google */}
-          {!request && !googleLoading ? (
-            <ActivityIndicator size="small" color="#003e70" style={{ marginBottom: 24 }} />
-          ) : googleLoading ? (
-            <ActivityIndicator size="large" color="#003e70" style={{ marginBottom: 24 }} />
-          ) : (
-            <Pressable
-              style={({ pressed }) => [
-                styles.googleButton,
-                { marginBottom: 24 },
-                pressed && styles.googleButtonDisabled,
-              ]}
-              onPress={signIn}>
-              <Image
-                source={{ uri: 'https://developers.google.com/identity/images/g-logo.png' }}
-                style={{ width: 24, height: 24 }}
-              />
-              <Text style={styles.googleLabel}>Iniciar sesión con Google</Text>
-            </Pressable>
-          )}
-          <Text style={{ textAlign: 'center', color: '#9ca3af', fontSize: 12, marginBottom: 24 }}>
-            Solo cuentas @ucaldas.edu.co
-          </Text>
-        </>
-      ) : (
+      {loginMethod === 'simple' ? (
         <View style={styles.formContainer}>
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Nombre completo</Text>
@@ -166,12 +235,23 @@ export default function SignUpScreen() {
             </Text>
           </Pressable>
         </View>
+      ) : (
+        <Pressable
+          disabled={!request || isSubmitting}
+          style={({ pressed }) => [
+            styles.googleButton,
+            (pressed || isSubmitting || !request) && styles.googleButtonDisabled,
+          ]}
+          onPress={handleGoogleSignup}>
+          <Text style={styles.googleLogo}>G</Text>
+          <Text style={styles.googleLabel}>
+            {isSubmitting ? 'Validando...' : 'Sign up with Google'}
+          </Text>
+        </Pressable>
       )}
 
-      {googleError ? <Text style={styles.status}>{googleError}</Text> : null}
-
       {statusText ? <Text style={styles.status}>{statusText}</Text> : null}
-    </KeyboardAwareScrollView>
+    </ScrollView>
   );
 }
 
@@ -183,44 +263,22 @@ const styles = StyleSheet.create({
     paddingVertical: 40,
     backgroundColor: '#ffffff',
   },
-  logoContainer: {
-    flexDirection: 'column',
-    alignItems: 'center',
-    alignSelf: 'center',
-    marginBottom: 24,
-  },
-  logo: {
-    width: 96,
-    height: 96,
-    marginBottom: 16,
-    borderRadius: 16,
-  },
-  logoText: {
-    fontSize: 50,
-    fontWeight: '800',
-    color: '#003e70',
-  },
   title: {
     fontSize: 30,
     fontWeight: '800',
     color: '#111827',
     marginBottom: 8,
-    textAlign: 'center',
   },
   subtitle: {
     marginBottom: 26,
     color: '#4b5563',
     fontSize: 15,
     lineHeight: 22,
-    textAlign: 'center',
   },
   methodSelector: {
     flexDirection: 'row',
     gap: 12,
     marginBottom: 24,
-  },
-  methodSelectorColumn: {
-    flexDirection: 'column',
   },
   methodButton: {
     flex: 1,
@@ -269,7 +327,7 @@ const styles = StyleSheet.create({
   submitButton: {
     borderRadius: 12,
     paddingVertical: 14,
-    backgroundColor: '#045389',
+    backgroundColor: '#1d4ed8',
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 8,
@@ -310,5 +368,7 @@ const styles = StyleSheet.create({
   },
   status: {
     marginTop: 16,
+    fontSize: 13,
+    color: '#111827',
   },
 });

@@ -24,27 +24,27 @@ export default function RootLayout() {
     <ErrorBoundary>
       <ToastProvider>
         <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-            <Stack
-              screenOptions={{
-                headerStyle: { backgroundColor: '#003e70' },
-                headerTintColor: '#fff',
-                headerTitleStyle: { fontWeight: 'bold' },
-                headerRight: () => (
-                  <Image
-                    source={require('../assets/images/LogoUC.png')}
-                    style={{ width: 36, height: 36, marginLeft: 12, marginRight: 12, borderRadius: 8 }}
-                  />
-                ),
-              }}
-            >
-              <Stack.Screen name="index" options={{ headerShown: false }} />
-              <Stack.Screen name="signup" options={{ title: 'Sign Up' }} />
-              <Stack.Screen name="dashboard" options={{ title: 'Dashboard' }} />
-              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-              <Stack.Screen name="profile-edit" options={{ title: 'Editar Perfil' }} />
-            </Stack>
-            <StatusBar style="auto" />
-          </ThemeProvider>
+          <Stack
+            screenOptions={{
+              headerStyle: { backgroundColor: '#003e70' },
+              headerTintColor: '#fff',
+              headerTitleStyle: { fontWeight: 'bold' },
+              headerRight: () => (
+                <Image
+                  source={require('../assets/images/LogoUC.png')}
+                  style={{ width: 36, height: 36, marginLeft: 12, marginRight: 12, borderRadius: 8 }}
+                />
+              ),
+            }}
+          >
+            <Stack.Screen name="index" options={{ headerShown: false }} />
+            <Stack.Screen name="signup" options={{ title: 'Sign Up' }} />
+            <Stack.Screen name="dashboard" options={{ title: 'Dashboard' }} />
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen name="profile-edit" options={{ title: 'Editar Perfil' }} />
+          </Stack>
+          <StatusBar style="auto" />
+        </ThemeProvider>
       </ToastProvider>
     </ErrorBoundary>
   );

@@ -1,12 +1,14 @@
-import { Link, router, useFocusEffect } from 'expo-router';
-import { Image, StyleSheet, Text, View } from 'react-native';
-import { useCallback } from 'react';
-import { saveSession, loadSession } from '@/lib/session';
+import { router, useFocusEffect } from 'expo-router';
+import { Alert, Image, Pressable, StyleSheet, Text, View, ActivityIndicator } from 'react-native';
+import { useCallback, useEffect } from 'react';
+import { loadSession } from '@/lib/session';
+import { useGoogleAuth } from '@/hooks/useGoogleAuth';
 
 export default function LandingScreen() {
+  const { user: googleUser, error: googleError, loading: googleLoading, request, signIn } = useGoogleAuth();
+
   useFocusEffect(
     useCallback(() => {
-      // Si ya hay una sesión guardada localmente, redirigir al dashboard
       const checkSession = async () => {
         try {
           const session = await loadSession();
@@ -19,7 +21,21 @@ export default function LandingScreen() {
       };
       checkSession();
     }, [])
-  ); return (
+  );
+
+  useEffect(() => {
+    if (googleUser) {
+      router.replace('/dashboard');
+    }
+  }, [googleUser]);
+
+  useEffect(() => {
+    if (googleError) {
+      Alert.alert('Error de Google', googleError);
+    }
+  }, [googleError]);
+
+  return (
     <View style={styles.container}>
       <View style={styles.logoContainer}>
         <Image source={require('../assets/images/LogoUC.png')} style={styles.logo} />
@@ -30,12 +46,23 @@ export default function LandingScreen() {
         Red universitaria para conocer estudiantes, compartir recursos y colaborar en proyectos.
       </Text>
 
-      <Link href="/signup" style={styles.primaryButton}>
-        Iniciar Sesión
-      </Link>
-      <Link href="/dashboard" style={styles.secondaryButton}>
-        Ir al dashboard demo
-      </Link>
+      {googleLoading ? (
+        <ActivityIndicator size="large" color="#045389" style={styles.loader} />
+      ) : (
+        <Pressable
+          style={({ pressed }) => [styles.primaryButton, (!request || pressed) && styles.primaryButtonDisabled]}
+          onPress={signIn}
+          disabled={!request || googleLoading}
+        >
+          <Image
+            source={{ uri: 'https://developers.google.com/identity/images/g-logo.png' }}
+            style={styles.googleLogo}
+          />
+          <Text style={styles.primaryButtonText}>Iniciar Sesión con Google</Text>
+        </Pressable>
+      )}
+
+      <Text style={styles.hint}>Solo cuentas @ucaldas.edu.co</Text>
     </View>
   );
 }
@@ -79,23 +106,38 @@ const styles = StyleSheet.create({
     marginBottom: 28,
     textAlign: 'center',
   },
-  primaryButton: {
-    backgroundColor: '#045389',
-    color: '#ffffff',
-    textAlign: 'center',
-    paddingVertical: 14,
-    borderRadius: 12,
-    fontWeight: '700',
-    overflow: 'hidden',
+  loader: {
     marginBottom: 12,
   },
-  secondaryButton: {
-    backgroundColor: '#045389',
-    color: '#ffffff',
-    textAlign: 'center',
+  primaryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#d1d5db',
     paddingVertical: 14,
     borderRadius: 12,
+    marginBottom: 12,
+    gap: 10,
+  },
+  primaryButtonDisabled: {
+    opacity: 0.6,
+  },
+  googleLogo: {
+    width: 24,
+    height: 24,
+  },
+  primaryButtonText: {
+    fontSize: 16,
     fontWeight: '700',
-    overflow: 'hidden',
+    color: '#111827',
+  },
+  hint: {
+    textAlign: 'center',
+    color: '#9ca3af',
+    fontSize: 12,
+    marginTop: 8,
   },
 });
+

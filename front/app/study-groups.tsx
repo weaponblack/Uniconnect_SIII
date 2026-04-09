@@ -257,15 +257,10 @@ export default function StudyGroupsScreen() {
 
     const handleAddResource = async () => {
         if (!editingGroup) return;
-        if (!resourceTitle.trim()) {
-            showToast('El título es obligatorio', 'error');
-            return;
-        }
 
         try {
             setIsUploadingResource(true);
             const formData = new FormData();
-            formData.append('title', resourceTitle.trim());
             formData.append('type', resourceType);
 
             if (resourceType === 'LINK') {
@@ -275,6 +270,8 @@ export default function StudyGroupsScreen() {
                     return;
                 }
                 formData.append('url', resourceLink.trim());
+                // Si no hay título, usar la URL como título
+                formData.append('title', resourceTitle.trim() || resourceLink.trim());
             } else {
                 // Pick Document
                 const result = await DocumentPicker.getDocumentAsync({
@@ -289,6 +286,10 @@ export default function StudyGroupsScreen() {
                 }
 
                 const file = result.assets[0];
+                // Si no hay título, usar el nombre del archivo (sin extensión)
+                const fallbackTitle = file.name.replace(/\.pdf$/i, '');
+                formData.append('title', resourceTitle.trim() || fallbackTitle);
+
                 if (Platform.OS === 'web' && file.file) {
                     // On Web, DocumentPicker provides the native File object inside the asset.
                     formData.append('file', file.file);
@@ -319,18 +320,18 @@ export default function StudyGroupsScreen() {
     if (isLoading || !session) {
         return (
             <View style={styles.loaderContainer}>
-                <Stack.Screen 
-                    options={{ 
+                <Stack.Screen
+                    options={{
                         title: 'Grupos de Estudio',
                         headerLeft: () => (
-                            <Pressable 
+                            <Pressable
                                 onPress={() => router.replace('/dashboard')}
                                 style={{ padding: 8, marginLeft: Platform.OS === 'ios' ? -8 : 0, flexDirection: 'row', alignItems: 'center' }}
                             >
                                 <Ionicons name={Platform.OS === 'ios' ? "chevron-back" : "arrow-back"} size={26} color="#ffffff" />
                             </Pressable>
                         )
-                    }} 
+                    }}
                 />
                 <ActivityIndicator />
                 <Text style={styles.loaderText}>Cargando grupos...</Text>
@@ -347,270 +348,288 @@ export default function StudyGroupsScreen() {
                 keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
             >
                 <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer} keyboardShouldPersistTaps="handled">
-                <Stack.Screen 
-                    options={{ 
-                        title: 'Gestionar Grupo',
-                        headerLeft: () => (
-                            <Pressable 
-                                onPress={() => { setEditingGroup(null); setSearchQuery(''); setSearchResults([]); }}
-                                style={{ padding: 8, marginLeft: Platform.OS === 'ios' ? -8 : 0, flexDirection: 'row', alignItems: 'center' }}
-                            >
-                                <Ionicons name={Platform.OS === 'ios' ? "chevron-back" : "arrow-back"} size={26} color="#ffffff" />
-                            </Pressable>
-                        )
-                    }} 
-                />
-
-                {session.user.id === editingGroup.ownerId ? (
-                    <View style={styles.card}>
-                        <Text style={styles.cardTitle}>Información del Grupo</Text>
-                        <Text style={styles.label}>Nombre</Text>
-                        <TextInput
-                            style={styles.input}
-                            value={editInfoName}
-                            onChangeText={setEditInfoName}
-                            placeholder="Nombre del grupo"
-                        />
-                        <Text style={styles.label}>Descripción</Text>
-                        <TextInput
-                            style={[styles.input, styles.textArea]}
-                            value={editInfoDesc}
-                            onChangeText={setEditInfoDesc}
-                            placeholder="Descripción del grupo"
-                            multiline
-                        />
-                        <Pressable
-                            style={[styles.saveChangesButton, isUpdatingInfo && { opacity: 0.6 }]}
-                            onPress={handleUpdateGroupInfo}
-                            disabled={isUpdatingInfo}
-                        >
-                            <Text style={styles.saveChangesButtonText}>
-                                {isUpdatingInfo ? 'Guardando...' : 'Guardar Cambios'}
-                            </Text>
-                        </Pressable>
-                    </View>
-                ) : (
-                    <>
-                        <Text style={styles.title}>Gestionar: {editingGroup.name}</Text>
-                        <Text style={styles.subtitle}>{editingGroup.description || 'Sin descripción'}</Text>
-                    </>
-                )}
-
-                <View style={styles.card}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                        <Text style={[styles.cardTitle, { marginBottom: 0 }]}>Recursos Compartidos</Text>
-                        <Pressable style={styles.addResourceButton} onPress={() => setResourceModalVisible(true)}>
-                            <Text style={styles.addResourceButtonText}>+ Añadir</Text>
-                        </Pressable>
-                    </View>
-
-                    {isLoadingResources ? (
-                        <ActivityIndicator />
-                    ) : resources.length === 0 ? (
-                        <Text style={styles.emptyText}>No hay recursos en este grupo</Text>
-                    ) : (
-                        resources.map(res => (
-                            <View key={res.id} style={styles.resourceItem}>
-                                <View style={styles.resourceIconContainer}>
-                                    <Ionicons name={res.type === 'PDF' ? "document-text" : "link"} size={24} color="#003e70" />
-                                </View>
-                                <View style={{ flex: 1, marginLeft: 12 }}>
-                                    <Text style={styles.resourceTitle}>{res.title}</Text>
-                                    <View style={{ flexDirection: 'row', gap: 6, marginTop: 4 }}>
-                                        <Text style={styles.resourceType}>{res.type}</Text>
-                                        <Text style={styles.resourceDate}>{new Date(res.createdAt).toLocaleDateString()}</Text>
-                                    </View>
-                                </View>
+                    <Stack.Screen
+                        options={{
+                            title: 'Gestionar Grupo',
+                            headerLeft: () => (
                                 <Pressable
-                                    style={styles.openResourceButton}
-                                    onPress={() => {
-                                        const finalUrl = res.url.startsWith('/') ? `${authConfig.backendUrl}${res.url}` : res.url;
-                                        Linking.openURL(finalUrl);
-                                    }}
+                                    onPress={() => { setEditingGroup(null); setSearchQuery(''); setSearchResults([]); }}
+                                    style={{ padding: 8, marginLeft: Platform.OS === 'ios' ? -8 : 0, flexDirection: 'row', alignItems: 'center' }}
                                 >
-                                    <Text style={styles.openResourceButtonText}>Abrir</Text>
+                                    <Ionicons name={Platform.OS === 'ios' ? "chevron-back" : "arrow-back"} size={26} color="#ffffff" />
                                 </Pressable>
-                                {((session?.user.id === res.uploaderId) || (session?.user.id === editingGroup.ownerId)) && (
-                                    <Pressable
-                                        style={styles.deleteResourceButton}
-                                        onPress={async () => {
-                                            try {
-                                                await deleteStudyGroupResource(editingGroup.id, res.id);
-                                                setResources(resources.filter(r => r.id !== res.id));
-                                                showToast('Recurso eliminado', 'success');
-                                            } catch (e) {
-                                                showToast('Error al eliminar', 'error');
-                                            }
-                                        }}
-                                    >
-                                        <Ionicons name="trash-outline" size={20} color="#ef4444" />
-                                    </Pressable>
-                                )}
-                            </View>
-                        ))
-                    )}
-                </View>
+                            )
+                        }}
+                    />
 
-                <View style={styles.card}>
-                    <Text style={styles.cardTitle}>Miembros actuales ({editingGroup.members.length})</Text>
-                    {editingGroup.members.map((member) => (
-                        <View key={member.id} style={styles.memberItem}>
-                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <View style={{ flex: 1 }}>
-                                    <Text style={styles.memberName}>{member.name || member.email}</Text>
-                                    <Text style={styles.memberCareer}>{member.career || 'Sin carrera'} • Semestre {member.currentSemester || '?'}</Text>
-                                    {member.id === editingGroup.ownerId ? (
-                                        <View style={styles.ownerBadge}><Text style={styles.ownerBadgeText}>Administrador</Text></View>
-                                    ) : null}
-                                </View>
-                                {session.user.id === editingGroup.ownerId && member.id !== editingGroup.ownerId && (
-                                    <Pressable
-                                        onPress={() => handleRemoveMember(member.id, member.name || member.email)}
-                                        disabled={isRemovingMember === member.id}
-                                        style={styles.removeMemberButton}
-                                    >
-                                        <Text style={styles.removeMemberButtonText}>
-                                            {isRemovingMember === member.id ? '...' : 'Eliminar'}
-                                        </Text>
-                                    </Pressable>
-                                )}
-                            </View>
-                        </View>
-                    ))}
-                </View>
-
-                {session.user.id === editingGroup.ownerId && (
-                    <View style={styles.card}>
-                        <Text style={styles.cardTitle}>Añadir estudiantes</Text>
-                        <View style={styles.searchRow}>
-                            <TextInput
-                                style={[styles.input, styles.flexInput]}
-                                value={searchQuery}
-                                onChangeText={setSearchQuery}
-                                placeholder="Buscar por nombre..."
-                                placeholderTextColor="#94a3b8"
-                                onSubmitEditing={handleSearch}
-                            />
-                            <Pressable style={styles.searchButton} onPress={handleSearch} disabled={isSearching}>
-                                <Text style={styles.searchButtonText}>{isSearching ? '...' : 'Buscar'}</Text>
-                            </Pressable>
-                        </View>
-
-                        {searchResults.length > 0 && (
-                            <ScrollView style={styles.searchResults} nestedScrollEnabled={true} keyboardShouldPersistTaps="handled">
-                                {searchResults.map((student) => (
-                                    <View key={student.id} style={styles.resultItem}>
-                                        <View style={{ flex: 1 }}>
-                                            <Text style={styles.resultName}>{student.name || student.email}</Text>
-                                            <Text style={styles.resultCareer}>{student.career || 'Sin carrera'} • Semestre {student.currentSemester || '?'}</Text>
-                                        </View>
-                                        <Pressable
-                                            style={styles.addButton}
-                                            onPress={() => handleAddMember(student.id)}
-                                            disabled={isAddingMember}
-                                        >
-                                            <Text style={styles.addButtonText}>Añadir</Text>
-                                        </Pressable>
-                                    </View>
-                                ))}
-                            </ScrollView>
-                        )}
-                        {searchResults.length === 0 && searchQuery.trim() !== '' && !isSearching && (
-                            <Text style={styles.noResultsText}>No se encontraron resultados nuevos.</Text>
-                        )}
-                    </View>
-                )}
-
-                {session.user.id === editingGroup.ownerId && (
-                    <Pressable
-                        style={[styles.deleteButton, isDeleting && { opacity: 0.6 }]}
-                        onPress={handleDeleteGroup}
-                        disabled={isDeleting}
-                    >
-                        <Text style={styles.deleteButtonText}>
-                            {isDeleting ? 'Eliminando...' : 'Eliminar Grupo'}
-                        </Text>
-                    </Pressable>
-                )}
-
-                {/* Resource Modal */}
-                <Modal
-                    visible={isResourceModalVisible}
-                    animationType="slide"
-                    transparent={true}
-                    onRequestClose={() => setResourceModalVisible(false)}
-                >
-                    <KeyboardAvoidingView
-                        style={{ flex: 1 }}
-                        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-                    >
-                        <View style={styles.modalOverlay}>
-                        <View style={styles.modalContent}>
-                            <Text style={styles.modalTitle}>Añadir Recurso</Text>
-
-                            <View style={styles.typeSelector}>
-                                <Pressable
-                                    style={[styles.typeButton, resourceType === 'PDF' && styles.typeButtonActive]}
-                                    onPress={() => setResourceType('PDF')}
-                                >
-                                    <Text style={[styles.typeButtonText, resourceType === 'PDF' && styles.typeButtonTextActive]}>Archivo PDF</Text>
-                                </Pressable>
-                                <Pressable
-                                    style={[styles.typeButton, resourceType === 'LINK' && styles.typeButtonActive]}
-                                    onPress={() => setResourceType('LINK')}
-                                >
-                                    <Text style={[styles.typeButtonText, resourceType === 'LINK' && styles.typeButtonTextActive]}>Enlace Web</Text>
-                                </Pressable>
-                            </View>
-
-                            <Text style={styles.label}>Título</Text>
+                    {session.user.id === editingGroup.ownerId ? (
+                        <View style={styles.card}>
+                            <Text style={styles.cardTitle}>Información del Grupo</Text>
+                            <Text style={styles.label}>Nombre</Text>
                             <TextInput
                                 style={styles.input}
-                                value={resourceTitle}
-                                onChangeText={setResourceTitle}
-                                placeholder={resourceType === 'PDF' ? "Ej: Apuntes Tema 1" : "Ej: Video explicativo"}
-                                placeholderTextColor="#94a3b8"
+                                value={editInfoName}
+                                onChangeText={setEditInfoName}
+                                placeholder="Nombre del grupo"
                             />
+                            <Text style={styles.label}>Descripción</Text>
+                            <TextInput
+                                style={[styles.input, styles.textArea]}
+                                value={editInfoDesc}
+                                onChangeText={setEditInfoDesc}
+                                placeholder="Descripción del grupo"
+                                multiline
+                            />
+                            <Pressable
+                                style={[styles.saveChangesButton, isUpdatingInfo && { opacity: 0.6 }]}
+                                onPress={handleUpdateGroupInfo}
+                                disabled={isUpdatingInfo}
+                            >
+                                <Text style={styles.saveChangesButtonText}>
+                                    {isUpdatingInfo ? 'Guardando...' : 'Guardar Cambios'}
+                                </Text>
+                            </Pressable>
+                        </View>
+                    ) : (
+                        <>
+                            <Text style={styles.title}>Gestionar: {editingGroup.name}</Text>
+                            <Text style={styles.subtitle}>{editingGroup.description || 'Sin descripción'}</Text>
+                        </>
+                    )}
 
-                            {resourceType === 'LINK' && (
-                                <>
-                                    <Text style={styles.label}>URL del enlace</Text>
-                                    <TextInput
-                                        style={styles.input}
-                                        value={resourceLink}
-                                        onChangeText={setResourceLink}
-                                        placeholder="https://..."
-                                        placeholderTextColor="#94a3b8"
-                                        autoCapitalize="none"
-                                        keyboardType="url"
-                                    />
-                                </>
-                            )}
-                            {resourceType === 'PDF' && (
-                                <Text style={styles.subtitle}>Al presionar 'Añadir', se abrirá el explorador de archivos para escoger tu PDF.</Text>
-                            )}
+                    <View style={styles.card}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                            <Text style={[styles.cardTitle, { marginBottom: 0 }]}>Recursos Compartidos</Text>
+                            <Pressable style={styles.addResourceButton} onPress={() => setResourceModalVisible(true)}>
+                                <Text style={styles.addResourceButtonText}>+ Añadir</Text>
+                            </Pressable>
+                        </View>
 
-                            <View style={styles.modalActions}>
-                                <Pressable
-                                    style={[styles.modalButton, styles.cancelModalButton]}
-                                    onPress={() => setResourceModalVisible(false)}
-                                    disabled={isUploadingResource}
-                                >
-                                    <Text style={styles.cancelModalButtonText}>Cancelar</Text>
-                                </Pressable>
-                                <Pressable
-                                    style={[styles.modalButton, styles.saveModalButton]}
-                                    onPress={handleAddResource}
-                                    disabled={isUploadingResource}
-                                >
-                                    <Text style={styles.saveModalButtonText}>{isUploadingResource ? 'Procesando...' : 'Añadir'}</Text>
+                        {isLoadingResources ? (
+                            <ActivityIndicator />
+                        ) : resources.length === 0 ? (
+                            <Text style={styles.emptyText}>No hay recursos en este grupo</Text>
+                        ) : (
+                            resources.map(res => (
+                                <View key={res.id} style={styles.resourceItem}>
+                                    <View style={styles.resourceIconContainer}>
+                                        <Ionicons name={res.type === 'PDF' ? "document-text" : "link"} size={24} color="#003e70" />
+                                    </View>
+                                    <View style={{ flex: 1, marginLeft: 12 }}>
+                                        <Text style={styles.resourceTitle}>{res.title}</Text>
+                                        <View style={{ flexDirection: 'row', gap: 6, marginTop: 4 }}>
+                                            <Text style={styles.resourceType}>{res.type}</Text>
+                                            <Text style={styles.resourceDate}>{new Date(res.createdAt).toLocaleDateString()}</Text>
+                                        </View>
+                                    </View>
+                                    <Pressable
+                                        style={styles.openResourceButton}
+                                        onPress={() => {
+                                            const finalUrl = res.url.startsWith('/') ? `${authConfig.backendUrl}${res.url}` : res.url;
+                                            Linking.openURL(finalUrl);
+                                        }}
+                                    >
+                                        <Text style={styles.openResourceButtonText}>Abrir</Text>
+                                    </Pressable>
+                                    {((session?.user.id === res.uploaderId) || (session?.user.id === editingGroup.ownerId)) && (
+                                        <Pressable
+                                            style={styles.deleteResourceButton}
+                                            onPress={() => {
+                                                const performDelete = async () => {
+                                                    try {
+                                                        await deleteStudyGroupResource(editingGroup.id, res.id);
+                                                        setResources(resources.filter(r => r.id !== res.id));
+                                                        showToast('Recurso eliminado', 'success');
+                                                    } catch (e) {
+                                                        showToast('Error al eliminar', 'error');
+                                                    }
+                                                };
+
+                                                if (Platform.OS === 'web') {
+                                                    if (window.confirm(`¿Seguro que deseas eliminar el recurso "${res.title}"?`)) {
+                                                        void performDelete();
+                                                    }
+                                                } else {
+                                                    const { Alert } = require('react-native');
+                                                    Alert.alert(
+                                                        'Eliminar recurso',
+                                                        `¿Seguro que deseas eliminar "${res.title}"?`,
+                                                        [
+                                                            { text: 'Cancelar', style: 'cancel' },
+                                                            { text: 'Eliminar', style: 'destructive', onPress: () => void performDelete() },
+                                                        ]
+                                                    );
+                                                }
+                                            }}
+                                        >
+                                            <Ionicons name="trash-outline" size={20} color="#ef4444" />
+                                        </Pressable>
+                                    )}
+                                </View>
+                            ))
+                        )}
+                    </View>
+
+                    <View style={styles.card}>
+                        <Text style={styles.cardTitle}>Miembros actuales ({editingGroup.members.length})</Text>
+                        {editingGroup.members.map((member) => (
+                            <View key={member.id} style={styles.memberItem}>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={styles.memberName}>{member.name || member.email}</Text>
+                                        <Text style={styles.memberCareer}>{member.career || 'Sin carrera'} • Semestre {member.currentSemester || '?'}</Text>
+                                        {member.id === editingGroup.ownerId ? (
+                                            <View style={styles.ownerBadge}><Text style={styles.ownerBadgeText}>Administrador</Text></View>
+                                        ) : null}
+                                    </View>
+                                    {session.user.id === editingGroup.ownerId && member.id !== editingGroup.ownerId && (
+                                        <Pressable
+                                            onPress={() => handleRemoveMember(member.id, member.name || member.email)}
+                                            disabled={isRemovingMember === member.id}
+                                            style={styles.removeMemberButton}
+                                        >
+                                            <Text style={styles.removeMemberButtonText}>
+                                                {isRemovingMember === member.id ? '...' : 'Eliminar'}
+                                            </Text>
+                                        </Pressable>
+                                    )}
+                                </View>
+                            </View>
+                        ))}
+                    </View>
+
+                    {session.user.id === editingGroup.ownerId && (
+                        <View style={styles.card}>
+                            <Text style={styles.cardTitle}>Añadir estudiantes</Text>
+                            <View style={styles.searchRow}>
+                                <TextInput
+                                    style={[styles.input, styles.flexInput]}
+                                    value={searchQuery}
+                                    onChangeText={setSearchQuery}
+                                    placeholder="Buscar por nombre..."
+                                    placeholderTextColor="#94a3b8"
+                                    onSubmitEditing={handleSearch}
+                                />
+                                <Pressable style={styles.searchButton} onPress={handleSearch} disabled={isSearching}>
+                                    <Text style={styles.searchButtonText}>{isSearching ? '...' : 'Buscar'}</Text>
                                 </Pressable>
                             </View>
+
+                            {searchResults.length > 0 && (
+                                <ScrollView style={styles.searchResults} nestedScrollEnabled={true} keyboardShouldPersistTaps="handled">
+                                    {searchResults.map((student) => (
+                                        <View key={student.id} style={styles.resultItem}>
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={styles.resultName}>{student.name || student.email}</Text>
+                                                <Text style={styles.resultCareer}>{student.career || 'Sin carrera'} • Semestre {student.currentSemester || '?'}</Text>
+                                            </View>
+                                            <Pressable
+                                                style={styles.addButton}
+                                                onPress={() => handleAddMember(student.id)}
+                                                disabled={isAddingMember}
+                                            >
+                                                <Text style={styles.addButtonText}>Añadir</Text>
+                                            </Pressable>
+                                        </View>
+                                    ))}
+                                </ScrollView>
+                            )}
+                            {searchResults.length === 0 && searchQuery.trim() !== '' && !isSearching && (
+                                <Text style={styles.noResultsText}>No se encontraron resultados nuevos.</Text>
+                            )}
                         </View>
-                    </View>
-                    </KeyboardAvoidingView>
-                </Modal>
-            </ScrollView>
+                    )}
+
+                    {session.user.id === editingGroup.ownerId && (
+                        <Pressable
+                            style={[styles.deleteButton, isDeleting && { opacity: 0.6 }]}
+                            onPress={handleDeleteGroup}
+                            disabled={isDeleting}
+                        >
+                            <Text style={styles.deleteButtonText}>
+                                {isDeleting ? 'Eliminando...' : 'Eliminar Grupo'}
+                            </Text>
+                        </Pressable>
+                    )}
+
+                    {/* Resource Modal */}
+                    <Modal
+                        visible={isResourceModalVisible}
+                        animationType="slide"
+                        transparent={true}
+                        onRequestClose={() => setResourceModalVisible(false)}
+                    >
+                        <KeyboardAvoidingView
+                            style={{ flex: 1 }}
+                            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                        >
+                            <View style={styles.modalOverlay}>
+                                <View style={styles.modalContent}>
+                                    <Text style={styles.modalTitle}>Añadir Recurso</Text>
+
+                                    <View style={styles.typeSelector}>
+                                        <Pressable
+                                            style={[styles.typeButton, resourceType === 'PDF' && styles.typeButtonActive]}
+                                            onPress={() => setResourceType('PDF')}
+                                        >
+                                            <Text style={[styles.typeButtonText, resourceType === 'PDF' && styles.typeButtonTextActive]}>Archivo PDF</Text>
+                                        </Pressable>
+                                        <Pressable
+                                            style={[styles.typeButton, resourceType === 'LINK' && styles.typeButtonActive]}
+                                            onPress={() => setResourceType('LINK')}
+                                        >
+                                            <Text style={[styles.typeButtonText, resourceType === 'LINK' && styles.typeButtonTextActive]}>Enlace Web</Text>
+                                        </Pressable>
+                                    </View>
+
+                                    <Text style={styles.label}>Título <Text style={{ color: '#94a3b8', fontWeight: '400' }}>(Opcional)</Text></Text>
+                                    <TextInput
+                                        style={styles.input}
+                                        value={resourceTitle}
+                                        onChangeText={setResourceTitle}
+                                        placeholder={resourceType === 'PDF' ? "Se usará el nombre del archivo" : "Ej: Video explicativo"}
+                                        placeholderTextColor="#94a3b8"
+                                    />
+
+                                    {resourceType === 'LINK' && (
+                                        <>
+                                            <Text style={styles.label}>URL del enlace</Text>
+                                            <TextInput
+                                                style={styles.input}
+                                                value={resourceLink}
+                                                onChangeText={setResourceLink}
+                                                placeholder="https://..."
+                                                placeholderTextColor="#94a3b8"
+                                                autoCapitalize="none"
+                                                keyboardType="url"
+                                            />
+                                        </>
+                                    )}
+                                    {resourceType === 'PDF' && (
+                                        <Text style={styles.subtitle}>Al presionar 'Añadir', se abrirá el explorador de archivos para escoger tu PDF.</Text>
+                                    )}
+
+                                    <View style={styles.modalActions}>
+                                        <Pressable
+                                            style={[styles.modalButton, styles.cancelModalButton]}
+                                            onPress={() => setResourceModalVisible(false)}
+                                            disabled={isUploadingResource}
+                                        >
+                                            <Text style={styles.cancelModalButtonText}>Cancelar</Text>
+                                        </Pressable>
+                                        <Pressable
+                                            style={[styles.modalButton, styles.saveModalButton]}
+                                            onPress={handleAddResource}
+                                            disabled={isUploadingResource}
+                                        >
+                                            <Text style={styles.saveModalButtonText}>{isUploadingResource ? 'Procesando...' : 'Añadir'}</Text>
+                                        </Pressable>
+                                    </View>
+                                </View>
+                            </View>
+                        </KeyboardAvoidingView>
+                    </Modal>
+                </ScrollView>
             </KeyboardAvoidingView>
         );
     }
@@ -618,18 +637,18 @@ export default function StudyGroupsScreen() {
     // List mode UI
     return (
         <View style={styles.container}>
-            <Stack.Screen 
-                options={{ 
+            <Stack.Screen
+                options={{
                     title: 'Grupos de Estudio',
                     headerLeft: () => (
-                        <Pressable 
+                        <Pressable
                             onPress={() => router.replace('/dashboard')}
                             style={{ padding: 8, marginLeft: Platform.OS === 'ios' ? -8 : 0, flexDirection: 'row', alignItems: 'center' }}
                         >
                             <Ionicons name={Platform.OS === 'ios' ? "chevron-back" : "arrow-back"} size={26} color="#ffffff" />
                         </Pressable>
                     )
-                }} 
+                }}
             />
             <View style={styles.header}>
                 <Text style={styles.title}>Grupos de Estudio</Text>
@@ -689,44 +708,44 @@ export default function StudyGroupsScreen() {
                     behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                 >
                     <View style={styles.modalOverlay}>
-                    <View style={styles.modalContent}>
-                        <Text style={styles.modalTitle}>Crear nuevo grupo</Text>
+                        <View style={styles.modalContent}>
+                            <Text style={styles.modalTitle}>Crear nuevo grupo</Text>
 
-                        <Text style={styles.label}>Nombre del grupo</Text>
-                        <TextInput
-                            style={styles.input}
-                            value={newGroupName}
-                            onChangeText={setNewGroupName}
-                            placeholder="Ej: Programación Avanzada"
-                            placeholderTextColor="#94a3b8"
-                        />
+                            <Text style={styles.label}>Nombre del grupo</Text>
+                            <TextInput
+                                style={styles.input}
+                                value={newGroupName}
+                                onChangeText={setNewGroupName}
+                                placeholder="Ej: Programación Avanzada"
+                                placeholderTextColor="#94a3b8"
+                            />
 
-                        <Text style={styles.label}>Descripción (Opcional)</Text>
-                        <TextInput
-                            style={[styles.input, styles.textArea]}
-                            value={newGroupDesc}
-                            onChangeText={setNewGroupDesc}
-                            placeholder="De qué trata el grupo..."
-                            placeholderTextColor="#94a3b8"
-                            multiline
-                            numberOfLines={3}
-                        />
+                            <Text style={styles.label}>Descripción (Opcional)</Text>
+                            <TextInput
+                                style={[styles.input, styles.textArea]}
+                                value={newGroupDesc}
+                                onChangeText={setNewGroupDesc}
+                                placeholder="De qué trata el grupo..."
+                                placeholderTextColor="#94a3b8"
+                                multiline
+                                numberOfLines={3}
+                            />
 
-                        <View style={styles.modalActions}>
-                            <Pressable
-                                style={[styles.modalButton, styles.cancelModalButton]}
-                                onPress={() => setCreateModalVisible(false)}
-                                disabled={isCreating}
-                            >
-                                <Text style={styles.cancelModalButtonText}>Cancelar</Text>
-                            </Pressable>
-                            <Pressable
-                                style={[styles.modalButton, styles.saveModalButton]}
-                                onPress={handleCreateGroup}
-                                disabled={isCreating}
-                            >
-                                <Text style={styles.saveModalButtonText}>{isCreating ? 'Creando...' : 'Crear'}</Text>
-                            </Pressable>
+                            <View style={styles.modalActions}>
+                                <Pressable
+                                    style={[styles.modalButton, styles.cancelModalButton]}
+                                    onPress={() => setCreateModalVisible(false)}
+                                    disabled={isCreating}
+                                >
+                                    <Text style={styles.cancelModalButtonText}>Cancelar</Text>
+                                </Pressable>
+                                <Pressable
+                                    style={[styles.modalButton, styles.saveModalButton]}
+                                    onPress={handleCreateGroup}
+                                    disabled={isCreating}
+                                >
+                                    <Text style={styles.saveModalButtonText}>{isCreating ? 'Creando...' : 'Crear'}</Text>
+                                </Pressable>
                             </View>
                         </View>
                     </View>

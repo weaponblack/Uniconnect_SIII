@@ -69,7 +69,7 @@
     "updates": {
       "url": "https://u.expo.dev/7c8d0a50-5ead-4990-b353-813fecfdb1d9",
       "fallbackToCacheTimeout": 0,
-      "checkAutomatically": "ON_APP_START"
+      "checkAutomatically": "ON_LOAD"
     }
   }
 }
