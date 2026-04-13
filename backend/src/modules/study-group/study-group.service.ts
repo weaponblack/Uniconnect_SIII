@@ -75,7 +75,51 @@ export async function getStudentStudyGroups(studentId: string, payload?: any) {
     });
 }
 
-export async function updateStudyGroup(groupId: string, ownerId: string, data: UpdateStudyGroupInput, payload?: any) {
+export async function getDiscoverableStudyGroups(studentId: string, payload?: any) {
+    let dbStudentId = studentId;
+    let studentCareer: string | null = null;
+
+    if (payload && payload.email) {
+        const student = await prisma.user.findUnique({
+            where: { email: payload.email },
+            select: { id: true, career: true },
+        });
+        if (student) {
+            dbStudentId = student.id;
+            studentCareer = student.career;
+        }
+    } else {
+        const student = await prisma.user.findUnique({
+            where: { id: studentId },
+            select: { career: true },
+        });
+        studentCareer = student?.career || null;
+    }
+
+    // Restriction: students can only see groups created by members of their same career
+    if (!studentCareer) {
+        return []; // Return empty if student has no career assigned?
+    }
+
+    return prisma.studyGroup.findMany({
+        where: {
+            owner: {
+                career: studentCareer
+            },
+            members: {
+                none: {
+                    id: dbStudentId
+                }
+            }
+        },
+        include: {
+            owner: { select: { id: true, name: true, career: true } },
+            _count: { select: { members: true } }
+        }
+    });
+}
+
+export async function updateStudyGroup(ownerId: string, groupId: string, data: UpdateStudyGroupInput, payload?: any) {
     let dbOwnerId = ownerId;
     if (payload && payload.email) {
         const existing = await prisma.user.findUnique({
@@ -166,7 +210,7 @@ export async function addMembersToGroup(groupId: string, ownerId: string, data: 
     });
 }
 
-export async function removeMemberFromGroup(groupId: string, ownerId: string, memberId: string, payload?: any) {
+export async function removeMemberFromGroup(ownerId: string, groupId: string, memberIdToRemove: string, payload?: any) {
     let dbOwnerId = ownerId;
     if (payload && payload.email) {
         const existing = await prisma.user.findUnique({
@@ -176,22 +220,186 @@ export async function removeMemberFromGroup(groupId: string, ownerId: string, me
         if (existing) dbOwnerId = existing.id;
     }
 
-    const group = await prisma.studyGroup.findUnique({ where: { id: groupId } });
+    const group = await prisma.studyGroup.findUnique({ 
+        where: { id: groupId },
+        include: { members: { orderBy: { createdAt: 'asc' } } }
+    });
 
     if (!group) throw new AppError(404, 'Study group not found');
-    if (group.ownerId !== dbOwnerId) throw new AppError(403, 'Only the owner can remove members');
-    if (dbOwnerId === memberId) throw new AppError(400, 'Owner cannot be removed from their own group');
+    
+    // Check if the person making the request is valid
+    if (dbOwnerId !== memberIdToRemove && group.ownerId !== dbOwnerId) {
+        throw new AppError(403, 'Only the owner can remove other members');
+    }
+
+    // Attempting to remove self or owner leaving
+    if (memberIdToRemove === group.ownerId) {
+        // If there are other members, give it to the oldest member
+        const otherMembers = group.members.filter(m => m.id !== group.ownerId);
+        
+        if (otherMembers.length > 0) {
+            const nextOwner = otherMembers[0];
+            return prisma.studyGroup.update({
+                where: { id: groupId },
+                data: {
+                    ownerId: nextOwner.id,
+                    members: {
+                        disconnect: { id: memberIdToRemove }
+                    }
+                },
+                include: {
+                    owner: { select: { id: true, name: true, email: true } },
+                    members: { select: { id: true, name: true, email: true } }
+                }
+            });
+        } else {
+            // Delete group if no members left
+            await prisma.studyGroup.delete({ where: { id: groupId } });
+            return { deleted: true };
+        }
+    }
 
     return prisma.studyGroup.update({
         where: { id: groupId },
         data: {
             members: {
-                disconnect: { id: memberId }
+                disconnect: { id: memberIdToRemove }
             }
         },
         include: {
             owner: { select: { id: true, name: true, email: true } },
-            members: { select: { id: true, name: true, email: true, career: true, currentSemester: true } },
+            members: { select: { id: true, name: true, email: true } }
         }
     });
+}
+
+// ============== NEW: STUDY GROUP REQUESTS ==============
+
+export async function requestToJoinGroup(studentId: string, groupId: string, payload?: any) {
+    let dbStudentId = studentId;
+    if (payload && payload.email) {
+        const existing = await prisma.user.findUnique({ where: { email: payload.email }, select: { id: true } });
+        if (existing) dbStudentId = existing.id;
+    }
+
+    // Check if the group exists
+    const group = await prisma.studyGroup.findUnique({
+        where: { id: groupId },
+        include: { members: true }
+    });
+    
+    if (!group) {
+        throw new AppError(404, 'Grupo de estudio no encontrado');
+    }
+
+    // Check if already a member
+    if (group.members.some(member => member.id === dbStudentId)) {
+        throw new AppError(400, 'Ya eres miembro de este grupo');
+    }
+
+    // Check if a request already exists
+    const existingRequest = await prisma.studyGroupRequest.findUnique({
+        where: {
+            groupId_userId: {
+                groupId: groupId,
+                userId: dbStudentId
+            }
+        }
+    });
+
+    if (existingRequest) {
+        if (existingRequest.status === 'PENDING') {
+            throw new AppError(400, 'Ya has enviado una solicitud a este grupo');
+        }
+        // If it was rejected or somehow else, we can decide to update it to pending again, 
+        // but let's just create/upsert it.
+    }
+
+    // Create the request
+    return prisma.studyGroupRequest.upsert({
+        where: {
+            groupId_userId: {
+                groupId: groupId,
+                userId: dbStudentId
+            }
+        },
+        update: { status: 'PENDING' },
+        create: {
+            groupId: groupId,
+            userId: dbStudentId,
+            status: 'PENDING'
+        }
+    });
+}
+
+export async function getGroupRequests(ownerId: string, groupId: string, payload?: any) {
+    let dbOwnerId = ownerId;
+    if (payload && payload.email) {
+        const existing = await prisma.user.findUnique({ where: { email: payload.email }, select: { id: true } });
+        if (existing) dbOwnerId = existing.id;
+    }
+
+    const group = await prisma.studyGroup.findUnique({
+        where: { id: groupId }
+    });
+
+    if (!group) throw new AppError(404, 'Grupo de estudio no encontrado');
+    if (group.ownerId !== dbOwnerId) throw new AppError(403, 'No tienes permiso para ver solicitudes de este grupo');
+
+    return prisma.studyGroupRequest.findMany({
+        where: { groupId: groupId, status: 'PENDING' },
+        include: {
+            user: { select: { id: true, name: true, email: true, career: true, currentSemester: true } }
+        }
+    });
+}
+
+export async function respondToGroupRequest(ownerId: string, groupId: string, requestId: string, status: 'ACCEPTED' | 'REJECTED', payload?: any) {
+    let dbOwnerId = ownerId;
+    if (payload && payload.email) {
+        const existing = await prisma.user.findUnique({ where: { email: payload.email }, select: { id: true } });
+        if (existing) dbOwnerId = existing.id;
+    }
+
+    const group = await prisma.studyGroup.findUnique({
+        where: { id: groupId }
+    });
+
+    if (!group) throw new AppError(404, 'Grupo de estudio no encontrado');
+    if (group.ownerId !== dbOwnerId) throw new AppError(403, 'No tienes permiso para responder a esta solicitud');
+
+    const request = await prisma.studyGroupRequest.findUnique({
+        where: { id: requestId }
+    });
+
+    if (!request || request.groupId !== groupId) throw new AppError(404, 'Solicitud no encontrada');
+
+    // Update Request status
+    const updatedRequest = await prisma.studyGroupRequest.update({
+        where: { id: requestId },
+        data: { status }
+    });
+
+    if (status === 'ACCEPTED') {
+        // Add user to the group members
+        await prisma.studyGroup.update({
+            where: { id: groupId },
+            data: {
+                members: {
+                    connect: { id: request.userId }
+                }
+            }
+        });
+
+        // Create a notification for the accepted user
+        await prisma.notification.create({
+            data: {
+                userId: request.userId,
+                type: 'REQUEST_ACCEPTED',
+                message: `¡Tu solicitud para unirte al grupo '${group.name}' ha sido aceptada!`
+            }
+        });
+    }
+
+    return updatedRequest;
 }

@@ -11,6 +11,11 @@ export async function signInSimple(email: string, name: string): Promise<Session
   return response.data;
 }
 
+export async function refreshSessionToken(refreshToken: string): Promise<SessionData> {
+  const response = await apiClient.post<SessionData>('/auth/refresh', { refreshToken }, { handleError: false });
+  return response.data;
+}
+
 export async function logoutWithRefreshToken(refreshToken: string): Promise<void> {
   await apiClient.post('/auth/logout', { refreshToken });
 }

@@ -25,6 +25,12 @@ model User {
   subjects       Subject[]      @relation("StudentSubjects")
   ownedGroups    StudyGroup[]   @relation("GroupOwner")
   memberOfGroups StudyGroup[]   @relation("GroupMembers")
+
+  posts           Post[]              @relation("UserPosts")
+  comments        Comment[]           @relation("UserComments")
+  organizedEvents Event[]             @relation("OrganizedEvents")
+  groupRequests   StudyGroupRequest[] @relation("UserGroupRequests")
+  notifications   Notification[]      @relation("UserNotifications")
 }
 
 model Subject {
@@ -35,7 +41,7 @@ model Subject {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  students  User[]   @relation("StudentSubjects")
+  students User[] @relation("StudentSubjects")
 }
 
 model AuthIdentity {
@@ -53,14 +59,14 @@ model AuthIdentity {
 }
 
 model Session {
-  id               String   @id @default(cuid())
+  id               String    @id @default(cuid())
   userId           String
   refreshTokenHash String
   userAgent        String?
   ip               String?
   expiresAt        DateTime
   revokedAt        DateTime?
-  createdAt        DateTime @default(now())
+  createdAt        DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -76,6 +82,84 @@ model StudyGroup {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  owner   User   @relation("GroupOwner", fields: [ownerId], references: [id], onDelete: Cascade)
-  members User[] @relation("GroupMembers")
+  owner    User                @relation("GroupOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  members  User[]              @relation("GroupMembers")
+  requests StudyGroupRequest[] @relation("GroupRequests")
+  posts    Post[]              @relation("GroupPosts")
+}
+
+model Post {
+  id        String   @id @default(cuid())
+  type      String   @default("GENERAL")
+  isPinned  Boolean  @default(false)
+  content   String
+  authorId  String
+  groupId   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  author    User       @relation("UserPosts", fields: [authorId], references: [id], onDelete: Cascade)
+  group     StudyGroup @relation("GroupPosts", fields: [groupId], references: [id], onDelete: Cascade)
+  comments  Comment[]
+  resources Resource[]
+}
+
+model Resource {
+  id        String   @id @default(cuid())
+  title     String
+  url       String
+  type      String
+  postId    String?
+  createdAt DateTime @default(now())
+
+  post Post? @relation(fields: [postId], references: [id], onDelete: Cascade)
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  content   String
+  postId    String
+  authorId  String
+  createdAt DateTime @default(now())
+
+  post   Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author User @relation("UserComments", fields: [authorId], references: [id], onDelete: Cascade)
+}
+
+model Event {
+  id          String   @id @default(cuid())
+  title       String
+  description String
+  eventDate   DateTime
+  location    String?
+  organizerId String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  organizer User @relation("OrganizedEvents", fields: [organizerId], references: [id], onDelete: Cascade)
+}
+
+model StudyGroupRequest {
+  id        String   @id @default(cuid())
+  groupId   String
+  userId    String
+  status    String   @default("PENDING")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  group StudyGroup @relation("GroupRequests", fields: [groupId], references: [id], onDelete: Cascade)
+  user  User       @relation("UserGroupRequests", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String
+  message   String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation("UserNotifications", fields: [userId], references: [id], onDelete: Cascade)
 }

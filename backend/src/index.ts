@@ -1,4 +1,5 @@
 import express from 'express';
+import path from 'path';
 import type { NextFunction, Request, Response } from 'express';
 import cors, { type CorsOptions } from 'cors';
 import helmet from 'helmet';
@@ -44,6 +45,9 @@ app.options('*', cors(corsOptions)); // importante para preflight
 app.use(helmet());
 app.use(morgan('dev'));
 app.use(express.json());
+
+// Servir archivos estáticos de la carpeta uploads
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
 let isDatabaseConnected = false;
 

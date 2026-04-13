@@ -16,3 +16,9 @@ export const addMembersSchema = z.object({
 });
 
 export type AddMembersInput = z.infer<typeof addMembersSchema>;
+
+export const respondToRequestSchema = z.object({
+    status: z.enum(['ACCEPTED', 'REJECTED']),
+});
+
+export type RespondToRequestInput = z.infer<typeof respondToRequestSchema>;

@@ -5,7 +5,7 @@ import { useCallback } from 'react';
 import { saveSession } from '@/lib/session';
 
 export default function LandingScreen() {
-  const { user, getCredentials } = useAuth0();
+  const { user, getCredentials, clearSession: clearAuth0Session } = useAuth0();
 
   useFocusEffect(
     useCallback(() => {
@@ -46,22 +46,31 @@ export default function LandingScreen() {
                   accessToken: credentials.idToken,
                   refreshToken: credentials.accessToken || ''
                 });
-              } catch (profileError) {
+              } catch (profileError: any) {
                 console.error("No se pudo sincronizar el perfil con el backend", profileError);
+                if (profileError?.response?.status === 401) {
+                  await clearAuth0Session().catch(() => {});
+                  const { clearSession } = await import('@/lib/session');
+                  await clearSession();
+                  return; // Stop flow and stay on Landing
+                }
               }
             }
           } catch (e) {
             console.error("No se pudo obtener las credenciales web", e);
           } finally {
             setTimeout(() => {
-              router.replace('/dashboard');
+              // Only redirect if still logged in
+              import('@/lib/session').then(s => s.loadSession()).then(sess => {
+                if (sess) router.replace('/dashboard');
+              });
             }, 100);
           }
         };
 
         syncSession();
       }
-    }, [user, getCredentials])
+    }, [user, getCredentials, clearAuth0Session])
   );  return (
     <View style={styles.container}>
       <View style={styles.logoContainer}>

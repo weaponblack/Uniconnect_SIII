@@ -1,8 +1,9 @@
 import type { Request, Response, NextFunction } from 'express';
 import jwt, { type JwtHeader, type SigningKeyCallback } from 'jsonwebtoken';
-import jwksRsa from 'jwks-rsa';
 import { env } from '../../config/env.js';
 import { AppError } from '../../errors/app-error.js';
+import { AuthManager } from './auth.manager.js';
+import { Logger } from '../../lib/logger.js';
 
 export type JwtPayload = {
     sub: string;
@@ -11,25 +12,9 @@ export type JwtPayload = {
     [key: string]: any;
 };
 
-// Set up the JWKS client for Auth0
-const client = jwksRsa({
-    jwksUri: `https://${env.AUTH0_DOMAIN}/.well-known/jwks.json`,
-    cache: true,
-    rateLimit: true,
-});
-
-function getKey(header: JwtHeader, callback: SigningKeyCallback) {
-    if (!header.kid) {
-        return callback(new Error('No kid in token header'));
-    }
-    client.getSigningKey(header.kid, (err, key) => {
-        if (err || !key) {
-            return callback(err || new Error('Unable to get signing key'));
-        }
-        const signingKey = key.getPublicKey();
-        callback(null, signingKey);
-    });
-}
+// Singleton instances
+const authManager = AuthManager.getInstance();
+const logger = Logger.getInstance();
 
 declare global {
     namespace Express {
@@ -55,9 +40,9 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
     
     // If it comes from Auth0 (has header.alg RS256 and header.kid)
     if (decoded.header.alg === 'RS256' && decoded.header.kid) {
-        jwt.verify(token, getKey, { algorithms: ['RS256'] }, (err, payload) => {
+        jwt.verify(token, authManager.getKey, { algorithms: ['RS256'] }, (err, payload) => {
             if (err) {
-                console.error('Auth0 token verification failed:', err.message);
+                logger.error('Auth0 token verification failed:', err.message);
                 return next(new AppError(401, 'Invalid or expired Auth0 token'));
             }
             req.user = payload as JwtPayload;
@@ -70,7 +55,7 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
             req.user = payload;
             next();
         } catch (error) {
-            console.error('Local token verification failed:', error);
+            logger.error('Local token verification failed:', error);
             next(new AppError(401, 'Invalid or expired token'));
         }
     }

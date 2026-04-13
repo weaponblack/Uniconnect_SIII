@@ -1,11 +1,16 @@
-import { OAuth2Client } from 'google-auth-library';
 import jwt from 'jsonwebtoken';
 import crypto from 'node:crypto';
 import { env, allowedDomains, googleClientIds } from '../../config/env.js';
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../errors/app-error.js';
+import { AuthManager } from './auth.manager.js';
+import { Logger } from '../../lib/logger.js';
 
-const googleClient = new OAuth2Client();
+// Get instances
+const authManager = AuthManager.getInstance();
+const logger = Logger.getInstance();
+const googleClient = authManager.getGoogleClient();
+
 const GOOGLE_ISSUERS = new Set(['accounts.google.com', 'https://accounts.google.com']);
 
 type DeviceContext = {

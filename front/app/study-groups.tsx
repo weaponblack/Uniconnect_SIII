@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View, Modal, Platform } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View, Modal, Platform, Alert, TouchableOpacity } from 'react-native';
 import { useToast } from '@/components/Toast';
 import { Stack, router, useFocusEffect } from 'expo-router';
 import { loadSession, type SessionData } from '@/lib/session';
@@ -11,14 +11,31 @@ import {
     removeMemberFromStudyGroup,
     searchStudentsByName,
     deleteStudyGroup,
+    getDiscoverableStudyGroups,
+    requestJoinGroup,
+    getGroupRequests,
+    respondToGroupRequest,
     type StudyGroup,
-    type StudyGroupMember
+    type StudyGroupMember,
+    type StudyGroupRequest
 } from '@/lib/study-group-api';
+import { Ionicons } from '@expo/vector-icons';
+import { Colors } from '@/constants/Colors';
 
 export default function StudyGroupsScreen() {
     const { showToast } = useToast();
     const [session, setSession] = useState<SessionData | null>(null);
     const [groups, setGroups] = useState<StudyGroup[]>([]);
+    
+    // Tab State
+    const [activeTab, setActiveTab] = useState<'mine' | 'discover'>('mine');
+    const [discoverGroups, setDiscoverGroups] = useState<StudyGroup[]>([]);
+    const [isDiscoverLoading, setIsDiscoverLoading] = useState(false);
+    
+    // Group requests state
+    const [groupRequests, setGroupRequests] = useState<StudyGroupRequest[]>([]);
+    const [isRequestingMap, setIsRequestingMap] = useState<Record<string, boolean>>({});
+
     const [isLoading, setIsLoading] = useState(true);
 
     const [isCreateModalVisible, setCreateModalVisible] = useState(false);
@@ -41,7 +58,31 @@ export default function StudyGroupsScreen() {
     const [editInfoDesc, setEditInfoDesc] = useState('');
     const [isUpdatingInfo, setIsUpdatingInfo] = useState(false);
 
-    useFocusEffect(
+    // Profile Modal State
+    const [selectedMember, setSelectedMember] = useState<StudyGroupMember | null>(null);
+
+    const isGroupOwner = useCallback((user: SessionData['user'] | undefined | null, group: StudyGroup | undefined | null) => {
+        if (!user || !group) return false;
+
+        // 1. Exact ID match
+        if (group.ownerId === user.id) return true;
+        
+        // 2. Exact email match (useful if they log in via different providers)
+        if (group.owner?.email && user.email) {
+            if (group.owner.email.toLowerCase().trim() === user.email.toLowerCase().trim()) return true;
+        }
+        
+        // 3. Weak fallback: if ID is an auth0 ID and the backend CUID matches their profile
+        if (group.owner?.id === user.id) return true;
+        if (user.id.includes(group.ownerId) || group.ownerId.includes(user.id.replace('auth0|', ''))) return true;
+
+        // 4. Sometimes email is missing in user session, fallback to name match if owner name is present
+        if (group.owner?.name && user.name) {
+            if (group.owner.name.toLowerCase().trim() === user.name.toLowerCase().trim()) return true;
+        }
+
+        return false;
+    }, []);    useFocusEffect(
         useCallback(() => {
             async function fetchGroups() {
                 try {
@@ -159,7 +200,6 @@ export default function StudyGroupsScreen() {
             }
         } else {
             // Keep Alert for confirmation since it's a destructive action
-            const { Alert } = require('react-native');
             Alert.alert(
                 'Eliminar miembro',
                 `¿Seguro que deseas eliminar a ${memberName} del grupo?`,
@@ -195,7 +235,6 @@ export default function StudyGroupsScreen() {
             }
         } else {
             // Keep Alert for confirmation
-            const { Alert } = require('react-native');
             Alert.alert(
                 'Eliminar Grupo',
                 `¿Estás seguro de que deseas eliminar el grupo "${editingGroup.name}"? Esta acción no se puede deshacer.`,
@@ -226,6 +265,127 @@ export default function StudyGroupsScreen() {
         }
     };
 
+    const handleTabChange = async (tab: 'mine' | 'discover') => {
+        setActiveTab(tab);
+        if (tab === 'discover' && discoverGroups.length === 0) {
+            // Only fetch discoverable groups if we don't have them loaded
+            setIsDiscoverLoading(true);
+            try {
+                const discovered = await getDiscoverableStudyGroups();
+                setDiscoverGroups(discovered);
+            } catch (error) {
+                console.error('Error fetching discoverable groups', error);
+                showToast('Error al cargar grupos descubiertos', 'error');
+            } finally {
+                setIsDiscoverLoading(false);
+            }
+        }
+    };
+
+    const handleJoinRequest = async (groupId: string) => {
+        if (!session) return;
+        try {
+            setIsRequestingMap(prev => ({ ...prev, [groupId]: true }));
+            await requestJoinGroup(groupId);
+            showToast('Solicitud de unión enviada', 'success');
+        } catch (error) {
+            console.error('Error sending join request', error);
+            showToast('Error al enviar solicitud', 'error');
+        } finally {
+            setIsRequestingMap(prev => ({ ...prev, [groupId]: false }));
+        }
+    };
+
+    const fetchGroupRequests = useCallback(async (groupId: string) => {
+        if (!session) return;
+        try {
+            const requests = await getGroupRequests(groupId);
+            setGroupRequests(requests);
+        } catch (error) {
+            console.error('Error fetching group requests', error);
+        }
+    }, [session]);
+
+    const handleRespondToRequest = async (requestId: string, accept: boolean) => {
+        if (!editingGroup) return;
+        try {
+            await respondToGroupRequest(editingGroup.id, requestId, accept ? 'ACCEPTED' : 'REJECTED');
+            showToast(accept ? 'Solicitud aceptada' : 'Solicitud rechazada', 'success');
+            // Refresh requests & group info
+            fetchGroupRequests(editingGroup.id);
+            // Optionally, refresh members if accepted...
+            if (accept) {
+                const refreshedGroups = await getStudentStudyGroups(session!.user.id);
+                setGroups(refreshedGroups);
+                const updatedGroup = refreshedGroups.find(g => g.id === editingGroup.id);
+                if (updatedGroup) setEditingGroup(updatedGroup);
+            }
+        } catch (error) {
+            console.error('Error responding to request', error);
+            showToast('Error al responder la solicitud', 'error');
+        }
+    };
+
+    useEffect(() => {
+        if (editingGroup && session && isGroupOwner(session.user, editingGroup)) {
+            fetchGroupRequests(editingGroup.id);
+        }
+    }, [editingGroup, session, fetchGroupRequests, isGroupOwner]);
+
+    const renderProfileModal = () => (
+        <Modal
+            visible={!!selectedMember}
+            animationType="slide"
+            transparent={true}
+            onRequestClose={() => setSelectedMember(null)}
+        >
+            <View style={styles.modalOverlay}>
+                <View style={styles.modalContent}>
+                    <View style={styles.modalHeader}>
+                        <Text style={styles.modalTitle}>Perfil de Estudiante</Text>
+                        <TouchableOpacity onPress={() => setSelectedMember(null)} style={styles.closeIcon}>
+                            <Ionicons name="close" size={24} color={Colors.light.text} />
+                        </TouchableOpacity>
+                    </View>
+
+                    {selectedMember && (
+                        <View style={styles.profileDetails}>
+                            <View style={styles.profileAvatar}>
+                                <Text style={styles.profileAvatarText}>
+                                    {selectedMember.name ? selectedMember.name.charAt(0).toUpperCase() : '?'}
+                                </Text>
+                            </View>
+                            <Text style={styles.profileName}>{selectedMember.name}</Text>
+                            <Text style={styles.profileEmail}>{selectedMember.email}</Text>
+                            
+                            <View style={styles.profileInfoBox}>
+                                <View style={styles.profileInfoRow}>
+                                    <Ionicons name="book-outline" size={20} color={Colors.light.tabIconDefault} />
+                                    <Text style={styles.profileInfoText}>
+                                        Carrera: <Text style={styles.profileInfoValue}>{selectedMember.career || 'No especificada'}</Text>
+                                    </Text>
+                                </View>
+                                <View style={styles.profileInfoRow}>
+                                    <Ionicons name="time-outline" size={20} color={Colors.light.tabIconDefault} />
+                                    <Text style={styles.profileInfoText}>
+                                        Semestre: <Text style={styles.profileInfoValue}>{selectedMember.currentSemester || 'No especificado'}</Text>
+                                    </Text>
+                                </View>
+                            </View>
+                        </View>
+                    )}
+
+                    <Pressable 
+                        style={[styles.modalButton, styles.cancelModalButton, { marginTop: 20 }]} 
+                        onPress={() => setSelectedMember(null)}
+                    >
+                        <Text style={styles.cancelModalButtonText}>Cerrar</Text>
+                    </Pressable>
+                </View>
+            </View>
+        </Modal>
+    );
+
     if (isLoading || !session) {
         return (
             <View style={styles.loaderContainer}>
@@ -244,7 +404,7 @@ export default function StudyGroupsScreen() {
                     <Text style={styles.backButtonText}>← Volver a mis grupos</Text>
                 </Pressable>
 
-                {session.user.id === editingGroup.ownerId ? (
+                {session && isGroupOwner(session.user, editingGroup) ? (
                     <View style={styles.card}>
                         <Text style={styles.cardTitle}>Información del Grupo</Text>
                         <Text style={styles.label}>Nombre</Text>
@@ -282,7 +442,10 @@ export default function StudyGroupsScreen() {
                 <View style={styles.card}>
                     <Text style={styles.cardTitle}>Miembros actuales ({editingGroup.members.length})</Text>
                     {editingGroup.members.map((member) => (
-                        <View key={member.id} style={styles.memberItem}>
+                        <View 
+                            key={member.id} 
+                            style={styles.memberItem}
+                        >
                             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <View style={{ flex: 1 }}>
                                     <Text style={styles.memberName}>{member.name || member.email}</Text>
@@ -291,23 +454,62 @@ export default function StudyGroupsScreen() {
                                         <View style={styles.ownerBadge}><Text style={styles.ownerBadgeText}>Administrador</Text></View>
                                     ) : null}
                                 </View>
-                                {session.user.id === editingGroup.ownerId && member.id !== editingGroup.ownerId && (
-                                    <Pressable
-                                        onPress={() => handleRemoveMember(member.id, member.name || member.email)}
-                                        disabled={isRemovingMember === member.id}
-                                        style={styles.removeMemberButton}
-                                    >
-                                        <Text style={styles.removeMemberButtonText}>
-                                            {isRemovingMember === member.id ? '...' : 'Eliminar'}
-                                        </Text>
-                                    </Pressable>
-                                )}
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                    <TouchableOpacity onPress={() => setSelectedMember(member)} style={styles.viewProfileButton}>
+                                        <Ionicons name="person-circle-outline" size={28} color={Colors.light.tint} />
+                                    </TouchableOpacity>
+
+                                    {session && isGroupOwner(session.user, editingGroup) && member.id !== editingGroup.ownerId && (
+                                        <Pressable
+                                            onPress={() => handleRemoveMember(member.id, member.name || member.email)}
+                                            disabled={isRemovingMember === member.id}
+                                            style={styles.removeMemberButton}
+                                        >
+                                            <Text style={styles.removeMemberButtonText}>
+                                                {isRemovingMember === member.id ? '...' : 'Eliminar'}
+                                            </Text>
+                                        </Pressable>
+                                    )}
+                                </View>
                             </View>
                         </View>
                     ))}
                 </View>
 
-                {session.user.id === editingGroup.ownerId && (
+                {session && isGroupOwner(session.user, editingGroup) && groupRequests.length > 0 && (
+                    <View style={styles.card}>
+                        <Text style={styles.cardTitle}>Solicitudes de unión ({groupRequests.length})</Text>
+                        {groupRequests.map((request) => (
+                            <View key={request.id} style={styles.memberItem}>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={styles.memberName}>{request.user?.name || request.user?.email || 'Usuario'}</Text>
+                                        <Text style={styles.memberCareer}>
+                                            {request.user?.career || 'Sin carrera'} • Semestre {request.user?.currentSemester || '?'}
+                                        </Text>
+                                        <Text style={{ fontSize: 12, color: '#64748b' }}>Status: {request.status}</Text>
+                                    </View>
+                                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                                        <Pressable
+                                            onPress={() => handleRespondToRequest(request.id, true)}
+                                            style={[styles.addButton, { backgroundColor: '#10b981' }]}
+                                        >
+                                            <Text style={styles.addButtonText}>Aceptar</Text>
+                                        </Pressable>
+                                        <Pressable
+                                            onPress={() => handleRespondToRequest(request.id, false)}
+                                            style={[styles.addButton, { backgroundColor: '#ef4444' }]}
+                                        >
+                                            <Text style={styles.addButtonText}>Rechazar</Text>
+                                        </Pressable>
+                                    </View>
+                                </View>
+                            </View>
+                        ))}
+                    </View>
+                )}
+
+                {session && isGroupOwner(session.user, editingGroup) && (
                     <View style={styles.card}>
                         <Text style={styles.cardTitle}>Añadir estudiantes</Text>
                         <View style={styles.searchRow}>
@@ -349,7 +551,7 @@ export default function StudyGroupsScreen() {
                     </View>
                 )}
 
-                {session.user.id === editingGroup.ownerId && (
+                {session && isGroupOwner(session.user, editingGroup) && (
                     <Pressable
                         style={[styles.deleteButton, isDeleting && { opacity: 0.6 }]}
                         onPress={handleDeleteGroup}
@@ -360,6 +562,7 @@ export default function StudyGroupsScreen() {
                         </Text>
                     </Pressable>
                 )}
+                {renderProfileModal()}
             </ScrollView>
         );
     }
@@ -376,38 +579,81 @@ export default function StudyGroupsScreen() {
                 <Text style={styles.subtitle}>Tus grupos actuales</Text>
             </View>
 
+            <View style={styles.tabContainer}>
+                <Pressable
+                    onPress={() => handleTabChange('mine')}
+                    style={[styles.tabButton, activeTab === 'mine' && styles.activeTab]}
+                >
+                    <Text style={[styles.tabButtonText, activeTab === 'mine' && styles.activeTabText]}>Mis Grupos</Text>
+                </Pressable>
+                <Pressable
+                    onPress={() => handleTabChange('discover')}
+                    style={[styles.tabButton, activeTab === 'discover' && styles.activeTab]}
+                >
+                    <Text style={[styles.tabButtonText, activeTab === 'discover' && styles.activeTabText]}>Descubrir Grupos</Text>
+                </Pressable>
+            </View>
+
             <ScrollView contentContainerStyle={styles.listContainer}>
-                {groups.length === 0 ? (
+                {activeTab === 'mine' && (!groups || groups.length === 0) ? (
                     <Text style={styles.emptyText}>No perteneces a ningún grupo de estudio todavía. ¡Crea uno!</Text>
-                ) : (
-                    groups.map((group) => {
-                        const isOwner = group.ownerId === session.user.id;
-                        return (
-                            <View key={group.id} style={styles.groupCard}>
-                                <View style={styles.groupHeader}>
-                                    <Text style={styles.groupName}>{group.name}</Text>
-                                    {isOwner && (
-                                        <View style={styles.ownerBadge}>
-                                            <Text style={styles.ownerBadgeText}>Administrador</Text>
-                                        </View>
-                                    )}
-                                </View>
-                                {!!group.description && <Text style={styles.groupDesc}>{group.description}</Text>}
-                                <Text style={styles.groupMembersCount}>{group.members.length} miembros</Text>
-                                <Pressable
-                                    style={styles.manageButton}
-                                    onPress={() => {
-                                        setEditingGroup(group);
-                                        setEditInfoName(group.name);
-                                        setEditInfoDesc(group.description || '');
-                                    }}
-                                >
-                                    <Text style={styles.manageButtonText}>{isOwner ? 'Gestionar' : 'Ver grupo'}</Text>
-                                </Pressable>
+                ) : activeTab === 'discover' && (!discoverGroups || discoverGroups.length === 0) ? (
+                    <Text style={styles.emptyText}>No hay grupos disponibles para mostrar.</Text>
+                ) : null}
+
+                {((activeTab === 'mine' ? groups : discoverGroups) || []).map((group) => {
+                    const isOwner = session && isGroupOwner(session.user, group);
+                    const isDiscover = activeTab === 'discover';
+                    const isRequesting = isRequestingMap[group.id] || false;
+
+                    return (
+                        <View key={group.id} style={styles.groupCard}>
+                            <View style={styles.groupHeader}>
+                                <Text style={styles.groupName}>{group.name}</Text>
+                                {isOwner && !isDiscover && (
+                                    <View style={styles.ownerBadge}>
+                                        <Text style={styles.ownerBadgeText}>Administrador</Text>
+                                    </View>
+                                )}
                             </View>
-                        );
-                    })
-                )}
+                            {!!group.description && <Text style={styles.groupDesc}>{group.description}</Text>}
+                            <Text style={styles.groupMembersCount}>
+                                {group.members?.length ?? (group as any)._count?.members ?? 0} miembros
+                            </Text>
+
+                            {isDiscover ? (
+                                <Pressable
+                                    style={[styles.manageButton, styles.joinButton, isRequesting && { opacity: 0.7 }]}
+                                    onPress={() => handleJoinRequest(group.id)}
+                                    disabled={isRequesting}
+                                >
+                                    <Text style={[styles.manageButtonText, styles.joinButtonText]}>
+                                        {isRequesting ? 'Enviando...' : 'Solicitar unirme'}
+                                    </Text>
+                                </Pressable>
+                            ) : (
+                                <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
+                                    <Pressable
+                                        style={[styles.manageButton, { flex: 1 }]}
+                                        onPress={() => {
+                                            setEditingGroup(group);
+                                            setEditInfoName(group.name);
+                                            setEditInfoDesc(group.description || '');
+                                        }}
+                                    >
+                                        <Text style={styles.manageButtonText}>{isOwner ? 'Gestionar' : 'Info'}</Text>
+                                    </Pressable>
+                                    <Pressable
+                                        style={[styles.manageButton, { flex: 1, backgroundColor: Colors.light.tint }]}
+                                        onPress={() => router.push(`/study-group/${group.id}?title=${encodeURIComponent(group.name)}` as any)}
+                                    >
+                                        <Text style={[styles.manageButtonText, { color: '#fff' }]}>Ver Muro</Text>
+                                    </Pressable>
+                                </View>
+                            )}
+                        </View>
+                    );
+                })}
             </ScrollView>
 
             <View style={styles.fabContainer}>
@@ -466,14 +712,14 @@ export default function StudyGroupsScreen() {
                     </View>
                 </View>
             </Modal>
+
+            {renderProfileModal()}
         </View>
     );
-}
-
-const styles = StyleSheet.create({
+}const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#f8fafc',
+        backgroundColor: Colors.light.background,
     },
     contentContainer: {
         padding: 20,
@@ -677,9 +923,89 @@ const styles = StyleSheet.create({
         backgroundColor: '#0f172a',
     },
     saveModalButtonText: {
-        color: '#ffffff',
-        fontWeight: '600',
+        color: '#FFFFFF',
+        fontWeight: 'bold',
+        fontSize: 16,
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 20,
+    },
+    closeIcon: {
+        padding: 5,
+    },
+    profileDetails: {
+        alignItems: 'center',
+    },
+    profileAvatar: {
+        width: 80,
+        height: 80,
+        borderRadius: 40,
+        backgroundColor: Colors.light.tint,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 15,
+    },
+    profileAvatarText: {
+        color: '#FFFFFF',
+        fontSize: 32,
+        fontWeight: 'bold',
+    },
+    profileName: {
+        fontSize: 22,
+        fontWeight: 'bold',
+        color: Colors.light.text,
+        marginBottom: 5,
+    },
+    profileEmail: {
+        fontSize: 16,
+        color: '#666',
+        marginBottom: 20,
+    },
+    profileInfoBox: {
+        width: '100%',
+        backgroundColor: '#f5f5f5',
+        borderRadius: 10,
+        padding: 15,
+    },
+    profileInfoRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 10,
+    },
+    profileInfoText: {
+        fontSize: 16,
+        color: '#444',
+        marginLeft: 10,
+    },
+    profileInfoValue: {
+        fontWeight: 'bold',
+        color: Colors.light.text,
+    },
+    tabContainer: {
+        flexDirection: 'row',
+        backgroundColor: '#ffffff',
+        borderBottomWidth: 1,
+        borderBottomColor: '#e2e8f0',
+    },
+    tabButton: {
+        flex: 1,
+        paddingVertical: 16,
+        alignItems: 'center',
+    },
+    activeTab: {
+        borderBottomWidth: 2,
+        borderBottomColor: '#003e70',
+    },
+    tabButtonText: {
         fontSize: 15,
+        fontWeight: '600',
+        color: '#64748b',
+    },
+    activeTabText: {
+        color: '#003e70',
     },
     card: {
         backgroundColor: '#ffffff',
@@ -709,6 +1035,9 @@ const styles = StyleSheet.create({
         fontSize: 13,
         color: '#64748b',
         marginTop: 2,
+    },
+    viewProfileButton: {
+        padding: 5,
     },
     searchRow: {
         flexDirection: 'row',
@@ -780,5 +1109,11 @@ const styles = StyleSheet.create({
         color: '#dc2626',
         fontWeight: '700',
         fontSize: 15,
+    },
+    joinButton: {
+        backgroundColor: '#003e70',
+    },
+    joinButtonText: {
+        color: '#ffffff',
     },
 });
