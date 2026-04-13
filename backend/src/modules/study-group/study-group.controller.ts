@@ -1,6 +1,12 @@
-import type { Request, Response } from 'express';
-import { createStudyGroup, getStudentStudyGroups, updateStudyGroup, addMembersToGroup, deleteStudyGroup, removeMemberFromGroup } from './study-group.service.js';
-import { createStudyGroupSchema, updateStudyGroupSchema, addMembersSchema } from './study-group.schemas.js';
+import { Request, Response, NextFunction } from 'express';
+import { AppError } from '../../errors/app-error.js';
+import {
+    createStudyGroup, getStudentStudyGroups, updateStudyGroup,
+    addMembersToGroup, deleteStudyGroup, removeMemberFromGroup,
+    requestToJoinGroup, getGroupRequests, respondToGroupRequest,
+    getDiscoverableStudyGroups
+} from './study-group.service.js';
+import { createStudyGroupSchema, updateStudyGroupSchema, addMembersSchema, respondToRequestSchema } from './study-group.schemas.js';
 import { catchAsync } from '../../lib/catch-async.js';
 import { AppError } from '../../errors/app-error.js';
 
@@ -11,18 +17,35 @@ export const createStudyGroupHandler = catchAsync(async (req: Request, res: Resp
     res.status(201).json(newGroup);
 });
 
-export const getStudentStudyGroupsHandler = catchAsync(async (req: Request, res: Response) => {
-    const payload = req.user!;
-    const groups = await getStudentStudyGroups(payload.sub, payload);
-    res.json(groups);
-});
+export async function getStudentStudyGroupsHandler(req: Request, res: Response, next: NextFunction) {
+    try {
+        const { studentId } = req.params;
+        const groups = await getStudentStudyGroups(studentId, req.user);
+        res.json(groups);
+    } catch (error) {
+        next(error);
+    }
+}
+
+export async function getDiscoverableStudyGroupsHandler(req: Request, res: Response, next: NextFunction) {
+    try {
+        const payload = req.user;
+        if (!payload || !payload.sub) {
+            throw new AppError(401, 'No autorizado');
+        }
+        const groups = await getDiscoverableStudyGroups(payload.sub, payload);
+        res.json(groups);
+    } catch (error) {
+        next(error);
+    }
+}
 
 export const updateStudyGroupHandler = catchAsync(async (req: Request, res: Response) => {
     const userId = req.user!.sub;
     const groupId = req.params.groupId;
     const data = updateStudyGroupSchema.parse(req.body);
 
-    const updatedGroup = await updateStudyGroup(groupId, userId, data, req.user);
+    const updatedGroup = await updateStudyGroup(userId, groupId, data, req.user);
     res.json(updatedGroup);
 });
 
@@ -48,7 +71,7 @@ export const removeMemberFromGroupHandler = catchAsync(async (req: Request, res:
     const groupId = req.params.groupId;
     const memberId = req.params.memberId;
 
-    const updatedGroup = await removeMemberFromGroup(groupId, userId, memberId, req.user);
+    const updatedGroup = await removeMemberFromGroup(userId, groupId, memberId, req.user);
     res.json(updatedGroup);
 });
 
@@ -99,8 +122,59 @@ export const getStudyGroupResourcesHandler = catchAsync(async (req: Request, res
     res.json(resources);
 });
 
+export async function requestJoinHandler(req: Request, res: Response, next: NextFunction) {
+    try {
+        const payload = req.user;
+        if (!payload || !payload.sub) {
+            throw new AppError(401, 'No autorizado');
+        }
+
+        const { groupId } = req.params;
+        const request = await requestToJoinGroup(payload.sub, groupId, payload);
+        res.status(201).json(request);
+    } catch (error) {
+        next(error);
+    }
+}
+
+export async function getGroupRequestsHandler(req: Request, res: Response, next: NextFunction) {
+    try {
+        const payload = req.user;
+        if (!payload || !payload.sub) {
+            throw new AppError(401, 'No autorizado');
+        }
+
+        const { groupId } = req.params;
+        const requests = await getGroupRequests(payload.sub, groupId, payload);
+        res.json(requests);
+    } catch (error) {
+        next(error);
+    }
+}
+
+export async function respondToRequestHandler(req: Request, res: Response, next: NextFunction) {
+    try {
+        const payload = req.user;
+        if (!payload || !payload.sub) {
+            throw new AppError(401, 'No autorizado');
+        }
+
+        const { groupId, requestId } = req.params;
+        const result = respondToRequestSchema.safeParse(req.body);
+        if (!result.success) {
+            throw new AppError(400, 'Datos invalidos');
+        }
+
+        const response = await respondToGroupRequest(payload.sub, groupId, requestId, result.data.status, payload);
+        res.json(response);
+    } catch (error) {
+        next(error);
+    }
+}
+
 // Using a getter to avoid circular dependencies if any, or just import them directly:
 import * as service from './study-group.service.js';
 function getService() {
     return service;
+}
 }

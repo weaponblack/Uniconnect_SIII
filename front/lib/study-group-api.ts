@@ -88,3 +88,34 @@ export async function addStudyGroupResource(groupId: string, formData: FormData)
 export async function deleteStudyGroupResource(groupId: string, resourceId: string): Promise<void> {
     await apiClient.delete(`/groups/${groupId}/resources/${resourceId}`);
 }
+
+// ==== STUDY GROUP REQUESTS OVER NETWORK ====
+
+export type StudyGroupRequest = {
+    id: string;
+    groupId: string;
+    userId: string;
+    status: 'PENDING' | 'ACCEPTED' | 'REJECTED';
+    createdAt: string;
+    user?: StudyGroupMember;
+}
+
+export async function getDiscoverableStudyGroups(): Promise<StudyGroup[]> {
+    const response = await apiClient.get<StudyGroup[]>('/groups/discover');
+    return response.data;
+}
+
+export async function requestJoinGroup(groupId: string): Promise<StudyGroupRequest> {
+    const response = await apiClient.post<StudyGroupRequest>(`/groups/${groupId}/requests`);
+    return response.data;
+}
+
+export async function getGroupRequests(groupId: string): Promise<StudyGroupRequest[]> {
+    const response = await apiClient.get<StudyGroupRequest[]>(`/groups/${groupId}/requests`);
+    return response.data;
+}
+
+export async function respondToGroupRequest(groupId: string, requestId: string, status: 'ACCEPTED' | 'REJECTED'): Promise<StudyGroupRequest> {
+    const response = await apiClient.put<StudyGroupRequest>(`/groups/${groupId}/requests/${requestId}`, { status });
+    return response.data;
+}

@@ -2,6 +2,8 @@ import type { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { env } from '../../config/env.js';
 import { AppError } from '../../errors/app-error.js';
+import { AuthManager } from './auth.manager.js';
+import { Logger } from '../../lib/logger.js';
 
 export type JwtPayload = {
     sub: string;
@@ -9,6 +11,7 @@ export type JwtPayload = {
     role?: string;
     [key: string]: any;
 };
+
 
 declare global {
     namespace Express {
@@ -33,5 +36,6 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
     } catch (error) {
         console.error('Token verification failed:', error);
         next(new AppError(401, 'Invalid or expired token'));
+    }
     }
 }

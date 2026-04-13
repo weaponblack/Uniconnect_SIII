@@ -24,3 +24,9 @@ export const createResourceSchema = z.object({
 });
 
 export type CreateResourceInput = z.infer<typeof createResourceSchema>;
+
+export const respondToRequestSchema = z.object({
+    status: z.enum(['ACCEPTED', 'REJECTED']),
+});
+
+export type RespondToRequestInput = z.infer<typeof respondToRequestSchema>;
