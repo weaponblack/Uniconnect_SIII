@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useToast } from '@/components/Toast';
 import { router } from 'expo-router';
 import { getStudentProfile, updateStudentProfile, type StudentProfile } from '@/lib/student-api';
@@ -123,6 +123,10 @@ const MATERIAS_SISTEMAS = [
     "Introducción A La Robótica"
 ];
 
+// Elimina tildes para comparaciones insensibles a acentos
+const normalize = (str: string) =>
+    str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
 export default function ProfileEditScreen() {
     const { showToast } = useToast();
     const [profile, setProfile] = useState<StudentProfile | null>(null);
@@ -136,19 +140,50 @@ export default function ProfileEditScreen() {
     const [newSubject, setNewSubject] = useState('');
     const [showCarreras, setShowCarreras] = useState(false);
     const [showSubjects, setShowSubjects] = useState(false);
+    const [semesterError, setSemesterError] = useState('');
+
+    // Refs para medir la posición de cada input y colocar el dropdown flotante
+    const rootViewRef = useRef<View>(null);
+    const careerInputRef = useRef<View>(null);
+    const subjectInputRef = useRef<View>(null);
+    const [careerDropPos, setCareerDropPos] = useState({ top: 0, left: 0 });
+    const [subjectDropPos, setSubjectDropPos] = useState({ top: 0, left: 0 });
+
+    const measureCareerInput = () => {
+        // Mide el rootView primero para obtener el offset del header
+        rootViewRef.current?.measureInWindow((rootX, rootY) => {
+            careerInputRef.current?.measureInWindow((x, y, width, height) => {
+                setCareerDropPos({
+                    top: y + height - rootY - 16, // -16 por el marginBottom del input
+                    left: x - rootX,
+                });
+            });
+        });
+    };
+
+    const measureSubjectInput = () => {
+        rootViewRef.current?.measureInWindow((rootX, rootY) => {
+            subjectInputRef.current?.measureInWindow((x, y, width, height) => {
+                setSubjectDropPos({
+                    top: y + height - rootY - 16,
+                    left: x - rootX,
+                });
+            });
+        });
+    };
 
     const filteredCarreras = useMemo(() => {
         if (!career) return CARRERAS;
-        const lower = career.toLowerCase();
-        return CARRERAS.filter(c => c.toLowerCase().includes(lower));
+        const q = normalize(career);
+        return CARRERAS.filter(c => normalize(c).includes(q));
     }, [career]);
 
-    const isSistemas = career.toLowerCase() === "ingeniería de sistemas y computación";
+    const isSistemas = normalize(career) === normalize('Ingeniería de sistemas y computación');
 
     const filteredSubjects = useMemo(() => {
         if (!isSistemas) return [];
-        const lower = newSubject.toLowerCase();
-        return MATERIAS_SISTEMAS.filter(s => s.toLowerCase().includes(lower) && !subjects.includes(s));
+        const q = normalize(newSubject);
+        return MATERIAS_SISTEMAS.filter(s => normalize(s).includes(q) && !subjects.includes(s));
     }, [newSubject, subjects, isSistemas]);
 
     useEffect(() => {
@@ -201,6 +236,12 @@ export default function ProfileEditScreen() {
             return;
         }
 
+        const semesterNum = parseInt(currentSemester.trim(), 10);
+        if (!currentSemester.trim() || isNaN(semesterNum) || semesterNum < 1 || semesterNum > 10) {
+            setSemesterError('El semestre debe ser un número entre 1 y 10.');
+            return;
+        }
+
         try {
             setIsSaving(true);
             await updateStudentProfile({
@@ -228,72 +269,69 @@ export default function ProfileEditScreen() {
     }
 
     return (
-        <ScrollView
-            style={styles.container}
-            contentContainerStyle={styles.contentContainer}
-            keyboardShouldPersistTaps="handled"
-        >
-            <Text style={styles.title}>Editar Perfil</Text>
+        <View ref={rootViewRef} style={{ flex: 1 }}>
+            <ScrollView
+                style={styles.container}
+                contentContainerStyle={styles.contentContainer}
+                keyboardShouldPersistTaps="handled"
+                onScrollBeginDrag={() => {
+                    setShowCarreras(false);
+                    setShowSubjects(false);
+                }}
+            >
+                <Text style={styles.title}>Editar Perfil</Text>
 
-            <View style={{ zIndex: 10 }}>
-                <Text style={styles.label}>Carrera</Text>
+                {/* Campo Carrera — el ref se pone en el wrapper para medir su posición */}
+                <View ref={careerInputRef} collapsable={false}>
+                    <Text style={styles.label}>Carrera</Text>
+                    <TextInput
+                        style={styles.input}
+                        value={career}
+                        onChangeText={(text) => {
+                            setCareer(text);
+                            setShowCarreras(true);
+                        }}
+                        onFocus={() => {
+                            measureCareerInput();
+                            setShowCarreras(true);
+                        }}
+                        placeholder="Ej: Ingeniería de Sistemas"
+                        placeholderTextColor="#94a3b8"
+                    />
+                </View>
+
+                <Text style={styles.label}>Semestre actual</Text>
                 <TextInput
-                    style={styles.input}
-                    value={career}
-                    onChangeText={(text) => {
-                        setCareer(text);
-                        setShowCarreras(true);
-                        // If they change career, clear subjects?
-                        // Optional: clear subjects when changing career
+                    style={[styles.input, semesterError ? styles.inputError : null]}
+                    value={currentSemester}
+                    onChangeText={(val) => {
+                        setCurrentSemester(val);
+                        const n = parseInt(val.trim(), 10);
+                        if (!val.trim() || isNaN(n) || n < 1 || n > 10) {
+                            setSemesterError('El semestre debe ser entre un número entre 1 y 10');
+                        } else {
+                            setSemesterError('');
+                        }
                     }}
-                    onFocus={() => setShowCarreras(true)}
-                    placeholder="Ej: Ingeniería de Sistemas"
+                    placeholder="Ej: 5"
+                    keyboardType="numeric"
                     placeholderTextColor="#94a3b8"
                 />
-                {showCarreras && filteredCarreras.length > 0 && (
-                    <View style={styles.suggestionsContainer}>
-                        {filteredCarreras.map((item, index) => (
-                            <Pressable
-                                key={index}
-                                style={styles.suggestionItem}
-                                onPress={() => {
-                                    if (item !== career) {
-                                        setCareer(item);
-                                        // Auto-clear subjects if career changes to something else to prevent invalid subjects
-                                        setSubjects([]);
-                                    } else {
-                                        setCareer(item);
-                                    }
-                                    setShowCarreras(false);
-                                }}>
-                                <Text style={styles.suggestionText}>{item}</Text>
-                            </Pressable>
-                        ))}
-                    </View>
-                )}
-            </View>
+                {semesterError ? (
+                    <Text style={styles.fieldError}>{semesterError}</Text>
+                ) : null}
 
-            <Text style={styles.label}>Semestre actual</Text>
-            <TextInput
-                style={styles.input}
-                value={currentSemester}
-                onChangeText={setCurrentSemester}
-                placeholder="Ej: 5"
-                keyboardType="numeric"
-                placeholderTextColor="#94a3b8"
-            />
-
-            <View style={{ zIndex: 9 }}>
                 <Text style={styles.label}>Materias inscritas</Text>
-                
+
                 {!career ? (
                     <Text style={styles.infoText}>Selecciona tu carrera primero</Text>
                 ) : (!isSistemas ? (
                     <Text style={styles.infoText}>El catálogo de materias para tu carrera aún no está disponible, ingresalas manualmente por favor.</Text>
                 ) : null)}
 
+                {/* Campo Materia */}
                 {career ? (
-                    <View style={styles.subjectInputRow}>
+                    <View ref={subjectInputRef} collapsable={false} style={styles.subjectInputRow}>
                         <TextInput
                             style={[styles.input, styles.flexInput]}
                             value={newSubject}
@@ -301,19 +339,85 @@ export default function ProfileEditScreen() {
                                 setNewSubject(text);
                                 setShowSubjects(true);
                             }}
-                            onFocus={() => setShowSubjects(true)}
+                            onFocus={() => {
+                                measureSubjectInput();
+                                setShowSubjects(true);
+                            }}
                             placeholder="Buscar materia..."
                             placeholderTextColor="#94a3b8"
                         />
-                        <Pressable style={styles.addButton} onPress={handleAddSubject}>
-                            <Text style={styles.addButtonLabel}>Añadir</Text>
-                        </Pressable>
+                        {/* Solo mostrar "Añadir" cuando la carrera NO tiene catálogo (ingreso manual) */}
+                        {!isSistemas && (
+                            <Pressable style={styles.addButton} onPress={handleAddSubject}>
+                                <Text style={styles.addButtonLabel}>Añadir</Text>
+                            </Pressable>
+                        )}
                     </View>
                 ) : null}
 
-                {showSubjects && isSistemas && filteredSubjects.length > 0 && (
-                    <View style={[styles.suggestionsContainer, { top: 70 }]}>
-                        {filteredSubjects.slice(0, 15).map((item, index) => (
+                {subjects.length === 0 ? (
+                    <Text style={styles.emptyText}>No tienes materias añadidas</Text>
+                ) : (
+                    <View style={styles.subjectsContainer}>
+                        {subjects.map((subject, index) => (
+                            <View key={subject} style={styles.subjectTag}>
+                                <Text style={styles.subjectText}>{subject}</Text>
+                                <Pressable onPress={() => handleRemoveSubject(index)} style={styles.removeTag}>
+                                    <Text style={styles.removeText}>X</Text>
+                                </Pressable>
+                            </View>
+                        ))}
+                    </View>
+                )}
+
+                <Pressable style={styles.saveButton} disabled={isSaving} onPress={handleSave}>
+                    <Text style={styles.saveButtonLabel}>{isSaving ? 'Guardando...' : 'Guardar Cambios'}</Text>
+                </Pressable>
+
+                <Pressable style={styles.cancelButton} disabled={isSaving} onPress={() => router.back()}>
+                    <Text style={styles.cancelButtonLabel}>Cancelar</Text>
+                </Pressable>
+            </ScrollView>
+
+            {/* ===== DROPDOWNS FLOTANTES — renderizados FUERA del ScrollView ===== */}
+            {/* Esto permite position:absolute + toque correcto en Android/iOS    */}
+
+            {showCarreras && filteredCarreras.length > 0 && (
+                <View style={[
+                    styles.suggestionsContainer,
+                    { top: careerDropPos.top, left: careerDropPos.left }
+                ]}>
+                    <ScrollView
+                        keyboardShouldPersistTaps="handled"
+                        nestedScrollEnabled={true}
+                    >
+                        {filteredCarreras.map((item, index) => (
+                            <Pressable
+                                key={index}
+                                style={styles.suggestionItem}
+                                onPress={() => {
+                                    setCareer(item !== career ? item : item);
+                                    if (item !== career) setSubjects([]);
+                                    setShowCarreras(false);
+                                    Keyboard.dismiss();
+                                }}>
+                                <Text style={styles.suggestionText}>{item}</Text>
+                            </Pressable>
+                        ))}
+                    </ScrollView>
+                </View>
+            )}
+
+            {showSubjects && isSistemas && filteredSubjects.length > 0 && (
+                <View style={[
+                    styles.suggestionsContainer,
+                    { top: subjectDropPos.top, left: subjectDropPos.left }
+                ]}>
+                    <ScrollView
+                        keyboardShouldPersistTaps="handled"
+                        nestedScrollEnabled={true}
+                    >
+                        {filteredSubjects.map((item, index) => (
                             <Pressable
                                 key={index}
                                 style={styles.suggestionItem}
@@ -323,45 +427,26 @@ export default function ProfileEditScreen() {
                                     }
                                     setNewSubject('');
                                     setShowSubjects(false);
+                                    Keyboard.dismiss();
                                 }}>
                                 <Text style={styles.suggestionText}>{item}</Text>
                             </Pressable>
                         ))}
-                    </View>
-                )}
-            </View>
-
-            {subjects.length === 0 ? (
-                <Text style={styles.emptyText}>No tienes materias añadidas</Text>
-            ) : (
-                <View style={styles.subjectsContainer}>
-                    {subjects.map((subject, index) => (
-                        <View key={subject} style={styles.subjectTag}>
-                            <Text style={styles.subjectText}>{subject}</Text>
-                            <Pressable onPress={() => handleRemoveSubject(index)} style={styles.removeTag}>
-                                <Text style={styles.removeText}>X</Text>
-                            </Pressable>
-                        </View>
-                    ))}
+                    </ScrollView>
                 </View>
             )}
-
-            <Pressable style={styles.saveButton} disabled={isSaving} onPress={handleSave}>
-                <Text style={styles.saveButtonLabel}>{isSaving ? 'Guardando...' : 'Guardar Cambios'}</Text>
-            </Pressable>
-
-            <Pressable style={styles.cancelButton} disabled={isSaving} onPress={() => router.back()}>
-                <Text style={styles.cancelButtonLabel}>Cancelar</Text>
-            </Pressable>
-        </ScrollView>
+        </View>
     );
 }
+
+
 
 const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: '#f8fafc',
     },
+
     contentContainer: {
         padding: 20,
         paddingTop: 40,
@@ -410,22 +495,32 @@ const styles = StyleSheet.create({
         flex: 1,
         marginBottom: 0,
     },
+    inputError: {
+        borderColor: '#ef4444',
+        borderWidth: 1.5,
+        marginBottom: 4,
+    },
+    fieldError: {
+        color: '#ef4444',
+        fontSize: 12,
+        marginBottom: 12,
+        marginTop: -2,
+    },
     suggestionsContainer: {
         maxHeight: 200,
         backgroundColor: '#ffffff',
         borderWidth: 1,
         borderColor: '#cbd5e1',
         borderRadius: 8,
-        marginTop: -12,
-        marginBottom: 16,
-        overflow: 'hidden',
         position: 'absolute',
-        top: 70, // Below the input field
-        left: 0,
-        right: 0,
-        zIndex: 20,
-        elevation: 5,
-        boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.1)',
+        right: 20,
+        zIndex: 100,
+        elevation: 8,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 6,
+        overflow: 'hidden',
     },
     suggestionItem: {
         paddingVertical: 12,

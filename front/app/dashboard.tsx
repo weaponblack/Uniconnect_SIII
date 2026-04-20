@@ -2,12 +2,9 @@ import { useCallback, useState } from 'react';
 import { router, useFocusEffect } from 'expo-router';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View, ScrollView } from 'react-native';
 import { clearSession, loadSession, type SessionData } from '@/lib/session';
-import { logoutWithRefreshToken } from '@/lib/auth-api';
 import { getStudentProfile, type StudentProfile } from '@/lib/student-api';
-import { useAuth0 } from 'react-native-auth0';
 
 export default function DashboardScreen() {
-  const { clearSession: auth0ClearSession } = useAuth0();
   const [session, setSession] = useState<SessionData | null>(null);
   const [profile, setProfile] = useState<StudentProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -38,21 +35,13 @@ export default function DashboardScreen() {
   );
 
   async function handleLogout() {
-    if (!session) {
-      return;
-    }
-
     try {
       setIsLoggingOut(true);
-      await logoutWithRefreshToken(session.refreshToken);
-      await auth0ClearSession();
     } catch {
-      // Ignore backend logout error to avoid leaving stale local session
+      // Ignore errors
     } finally {
       await clearSession();
       setIsLoggingOut(false);
-
-      // Navigate safely avoiding layout unmount crashes
       setTimeout(() => {
         router.replace('/');
       }, 0);
