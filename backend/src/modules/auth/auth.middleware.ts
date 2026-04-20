@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from 'express';
-import jwt, { type JwtHeader, type SigningKeyCallback } from 'jsonwebtoken';
+import jwt from 'jsonwebtoken';
 import { env } from '../../config/env.js';
 import { AppError } from '../../errors/app-error.js';
 import { AuthManager } from './auth.manager.js';
@@ -12,9 +12,6 @@ export type JwtPayload = {
     [key: string]: any;
 };
 
-// Singleton instances
-const authManager = AuthManager.getInstance();
-const logger = Logger.getInstance();
 
 declare global {
     namespace Express {
@@ -31,32 +28,14 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
     }
 
     const token = authHeader.split(' ')[1];
-    
-    // First loosely decode to see where token came from
-    const decoded = jwt.decode(token, { complete: true });
-    if (!decoded || !decoded.header) {
-        return next(new AppError(401, 'Invalid token structure'));
+
+    try {
+        const payload = jwt.verify(token, env.JWT_ACCESS_SECRET) as JwtPayload;
+        req.user = payload;
+        next();
+    } catch (error) {
+        console.error('Token verification failed:', error);
+        next(new AppError(401, 'Invalid or expired token'));
     }
-    
-    // If it comes from Auth0 (has header.alg RS256 and header.kid)
-    if (decoded.header.alg === 'RS256' && decoded.header.kid) {
-        jwt.verify(token, authManager.getKey, { algorithms: ['RS256'] }, (err, payload) => {
-            if (err) {
-                logger.error('Auth0 token verification failed:', err.message);
-                return next(new AppError(401, 'Invalid or expired Auth0 token'));
-            }
-            req.user = payload as JwtPayload;
-            return next();
-        });
-    } else {
-        // Fallback to local token (HS256)
-        try {
-            const payload = jwt.verify(token, env.JWT_ACCESS_SECRET) as JwtPayload;
-            req.user = payload;
-            next();
-        } catch (error) {
-            logger.error('Local token verification failed:', error);
-            next(new AppError(401, 'Invalid or expired token'));
-        }
     }
 }

@@ -1,8 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View, Keyboard, KeyboardAvoidingView, Platform } from 'react-native';
 import { useToast } from '@/components/Toast';
 import { router } from 'expo-router';
 import { getStudentProfile, updateStudentProfile, type StudentProfile } from '@/lib/student-api';
+
+const normalizeString = (str: string) => {
+    if (!str) return '';
+    return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+};
 
 const CARRERAS = [
     "Administración de empresas agropecuarias",
@@ -139,16 +144,16 @@ export default function ProfileEditScreen() {
 
     const filteredCarreras = useMemo(() => {
         if (!career) return CARRERAS;
-        const lower = career.toLowerCase();
-        return CARRERAS.filter(c => c.toLowerCase().includes(lower));
+        const searchNorm = normalizeString(career);
+        return CARRERAS.filter(c => normalizeString(c).includes(searchNorm));
     }, [career]);
 
-    const isSistemas = career.toLowerCase() === "ingeniería de sistemas y computación";
+    const isSistemas = normalizeString(career) === normalizeString("Ingeniería de sistemas y computación");
 
     const filteredSubjects = useMemo(() => {
         if (!isSistemas) return [];
-        const lower = newSubject.toLowerCase();
-        return MATERIAS_SISTEMAS.filter(s => s.toLowerCase().includes(lower) && !subjects.includes(s));
+        const searchNorm = normalizeString(newSubject);
+        return MATERIAS_SISTEMAS.filter(s => normalizeString(s).includes(searchNorm) && !subjects.includes(s));
     }, [newSubject, subjects, isSistemas]);
 
     useEffect(() => {
@@ -173,7 +178,8 @@ export default function ProfileEditScreen() {
         if (!trimmed) return;
 
         if (isSistemas) {
-            const match = MATERIAS_SISTEMAS.find(m => m.toLowerCase() === trimmed.toLowerCase());
+            const searchNorm = normalizeString(trimmed);
+            const match = MATERIAS_SISTEMAS.find(m => normalizeString(m) === searchNorm);
             if (match && !subjects.includes(match)) {
                 setSubjects([...subjects, match]);
                 setNewSubject('');
@@ -199,6 +205,14 @@ export default function ProfileEditScreen() {
         if (career.trim() && !CARRERAS.includes(career.trim())) {
             Alert.alert('Error', 'Por favor selecciona una carrera sugerida de la lista.');
             return;
+        }
+
+        if (currentSemester.trim() !== '') {
+            const sem = parseInt(currentSemester, 10);
+            if (isNaN(sem) || sem < 0 || sem > 10) {
+                Alert.alert('Error', 'El semestre debe ser un número entre 0 y 10.');
+                return;
+            }
         }
 
         try {
@@ -228,132 +242,151 @@ export default function ProfileEditScreen() {
     }
 
     return (
-        <ScrollView
-            style={styles.container}
-            contentContainerStyle={styles.contentContainer}
-            keyboardShouldPersistTaps="handled"
+        <KeyboardAvoidingView
+            style={{ flex: 1 }}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
         >
-            <Text style={styles.title}>Editar Perfil</Text>
+            <ScrollView
+                style={styles.container}
+                contentContainerStyle={styles.contentContainer}
+                keyboardShouldPersistTaps="handled"
+            >
+                <Text style={styles.title}>Editar Perfil</Text>
 
-            <View style={{ zIndex: 10 }}>
-                <Text style={styles.label}>Carrera</Text>
+                <View style={{ zIndex: 10 }}>
+                    <Text style={styles.label}>Carrera</Text>
+                    <TextInput
+                        style={styles.input}
+                        value={career}
+                        onChangeText={(text) => {
+                            setCareer(text);
+                            setShowCarreras(true);
+                            // If they change career, clear subjects?
+                            // Optional: clear subjects when changing career
+                        }}
+                        onFocus={() => setShowCarreras(true)}
+                        onBlur={() => setTimeout(() => setShowCarreras(false), 200)}
+                        placeholder="Selecciona tu carrera"
+                        placeholderTextColor="#94a3b8"
+                    />
+                    {showCarreras && filteredCarreras.length > 0 && (
+                        <ScrollView nestedScrollEnabled={true} keyboardShouldPersistTaps="handled" style={styles.suggestionsContainer}>
+                            {filteredCarreras.map((item, index) => (
+                                <Pressable
+                                    key={index}
+                                    style={styles.suggestionItem}
+                                    onPress={() => {
+                                        if (item !== career) {
+                                            setCareer(item);
+                                            // Auto-clear subjects if career changes to something else to prevent invalid subjects
+                                            setSubjects([]);
+                                        } else {
+                                            setCareer(item);
+                                        }
+                                        setShowCarreras(false);
+                                    }}>
+                                    <Text style={styles.suggestionText}>{item}</Text>
+                                </Pressable>
+                            ))}
+                        </ScrollView>
+                    )}
+                </View>
+
+                <Text style={styles.label}>Semestre actual</Text>
                 <TextInput
-                    style={styles.input}
-                    value={career}
+                    style={[
+                        styles.input,
+                        currentSemester !== '' && (parseInt(currentSemester, 10) < 0 || parseInt(currentSemester, 10) > 10) ? { borderColor: '#ef4444' } : null
+                    ]}
+                    value={currentSemester}
                     onChangeText={(text) => {
-                        setCareer(text);
-                        setShowCarreras(true);
-                        // If they change career, clear subjects?
-                        // Optional: clear subjects when changing career
+                        const numeric = text.replace(/[^0-9]/g, '');
+                        setCurrentSemester(numeric);
                     }}
-                    onFocus={() => setShowCarreras(true)}
-                    placeholder="Ej: Ingeniería de Sistemas"
+                    placeholder="Ej: 5"
+                    keyboardType="numeric"
                     placeholderTextColor="#94a3b8"
                 />
-                {showCarreras && filteredCarreras.length > 0 && (
-                    <View style={styles.suggestionsContainer}>
-                        {filteredCarreras.map((item, index) => (
-                            <Pressable
-                                key={index}
-                                style={styles.suggestionItem}
-                                onPress={() => {
-                                    if (item !== career) {
-                                        setCareer(item);
-                                        // Auto-clear subjects if career changes to something else to prevent invalid subjects
-                                        setSubjects([]);
-                                    } else {
-                                        setCareer(item);
-                                    }
-                                    setShowCarreras(false);
-                                }}>
-                                <Text style={styles.suggestionText}>{item}</Text>
-                            </Pressable>
-                        ))}
-                    </View>
+                {currentSemester !== '' && (parseInt(currentSemester, 10) < 0 || parseInt(currentSemester, 10) > 10) && (
+                    <Text style={styles.errorText}>El semestre debe ser un número entre 0 y 10</Text>
                 )}
-            </View>
 
-            <Text style={styles.label}>Semestre actual</Text>
-            <TextInput
-                style={styles.input}
-                value={currentSemester}
-                onChangeText={setCurrentSemester}
-                placeholder="Ej: 5"
-                keyboardType="numeric"
-                placeholderTextColor="#94a3b8"
-            />
+                <View style={{ zIndex: 9 }}>
+                    <Text style={styles.label}>Materias inscritas</Text>
 
-            <View style={{ zIndex: 9 }}>
-                <Text style={styles.label}>Materias inscritas</Text>
-                
-                {!career ? (
-                    <Text style={styles.infoText}>Selecciona tu carrera primero</Text>
-                ) : (!isSistemas ? (
-                    <Text style={styles.infoText}>El catálogo de materias para tu carrera aún no está disponible, ingresalas manualmente por favor.</Text>
-                ) : null)}
+                    {!career ? (
+                        <Text style={styles.infoText}>Selecciona tu carrera primero</Text>
+                    ) : (!isSistemas ? (
+                        <Text style={styles.infoText}>El catálogo de materias para tu carrera aún no está disponible, ingresalas manualmente por favor.</Text>
+                    ) : null)}
 
-                {career ? (
-                    <View style={styles.subjectInputRow}>
-                        <TextInput
-                            style={[styles.input, styles.flexInput]}
-                            value={newSubject}
-                            onChangeText={(text) => {
-                                setNewSubject(text);
-                                setShowSubjects(true);
-                            }}
-                            onFocus={() => setShowSubjects(true)}
-                            placeholder="Buscar materia..."
-                            placeholderTextColor="#94a3b8"
-                        />
-                        <Pressable style={styles.addButton} onPress={handleAddSubject}>
-                            <Text style={styles.addButtonLabel}>Añadir</Text>
-                        </Pressable>
-                    </View>
-                ) : null}
-
-                {showSubjects && isSistemas && filteredSubjects.length > 0 && (
-                    <View style={[styles.suggestionsContainer, { top: 70 }]}>
-                        {filteredSubjects.slice(0, 15).map((item, index) => (
-                            <Pressable
-                                key={index}
-                                style={styles.suggestionItem}
-                                onPress={() => {
-                                    if (!subjects.includes(item)) {
-                                        setSubjects([...subjects, item]);
-                                    }
-                                    setNewSubject('');
-                                    setShowSubjects(false);
-                                }}>
-                                <Text style={styles.suggestionText}>{item}</Text>
-                            </Pressable>
-                        ))}
-                    </View>
-                )}
-            </View>
-
-            {subjects.length === 0 ? (
-                <Text style={styles.emptyText}>No tienes materias añadidas</Text>
-            ) : (
-                <View style={styles.subjectsContainer}>
-                    {subjects.map((subject, index) => (
-                        <View key={subject} style={styles.subjectTag}>
-                            <Text style={styles.subjectText}>{subject}</Text>
-                            <Pressable onPress={() => handleRemoveSubject(index)} style={styles.removeTag}>
-                                <Text style={styles.removeText}>X</Text>
-                            </Pressable>
+                    {career ? (
+                        <View style={styles.subjectInputRow}>
+                            <TextInput
+                                style={[styles.input, styles.flexInput]}
+                                value={newSubject}
+                                onChangeText={(text) => {
+                                    setNewSubject(text);
+                                    setShowSubjects(true);
+                                }}
+                                onFocus={() => setShowSubjects(true)}
+                                onBlur={() => setTimeout(() => setShowSubjects(false), 200)}
+                                placeholder="Buscar materia..."
+                                placeholderTextColor="#94a3b8"
+                            />
+                            {!isSistemas && (
+                                <Pressable style={styles.addButton} onPress={handleAddSubject}>
+                                    <Text style={styles.addButtonLabel}>Añadir</Text>
+                                </Pressable>
+                            )}
                         </View>
-                    ))}
+                    ) : null}
+
+                    {showSubjects && isSistemas && filteredSubjects.length > 0 && (
+                        <ScrollView nestedScrollEnabled={true} keyboardShouldPersistTaps="handled" style={styles.suggestionsContainer}>
+                            {filteredSubjects.slice(0, 50).map((item, index) => (
+                                <Pressable
+                                    key={index}
+                                    style={styles.suggestionItem}
+                                    onPress={() => {
+                                        if (!subjects.includes(item)) {
+                                            setSubjects([...subjects, item]);
+                                        }
+                                        setNewSubject('');
+                                        setShowSubjects(false);
+                                    }}>
+                                    <Text style={styles.suggestionText}>{item}</Text>
+                                </Pressable>
+                            ))}
+                        </ScrollView>
+                    )}
                 </View>
-            )}
 
-            <Pressable style={styles.saveButton} disabled={isSaving} onPress={handleSave}>
-                <Text style={styles.saveButtonLabel}>{isSaving ? 'Guardando...' : 'Guardar Cambios'}</Text>
-            </Pressable>
+                {subjects.length === 0 ? (
+                    <Text style={styles.emptyText}>No tienes materias añadidas</Text>
+                ) : (
+                    <View style={styles.subjectsContainer}>
+                        {subjects.map((subject, index) => (
+                            <View key={subject} style={styles.subjectTag}>
+                                <Text style={styles.subjectText}>{subject}</Text>
+                                <Pressable onPress={() => handleRemoveSubject(index)} style={styles.removeTag}>
+                                    <Text style={styles.removeText}>X</Text>
+                                </Pressable>
+                            </View>
+                        ))}
+                    </View>
+                )}
 
-            <Pressable style={styles.cancelButton} disabled={isSaving} onPress={() => router.back()}>
-                <Text style={styles.cancelButtonLabel}>Cancelar</Text>
-            </Pressable>
-        </ScrollView>
+                <Pressable style={styles.saveButton} disabled={isSaving} onPress={handleSave}>
+                    <Text style={styles.saveButtonLabel}>{isSaving ? 'Guardando...' : 'Guardar Cambios'}</Text>
+                </Pressable>
+
+                <Pressable style={styles.cancelButton} disabled={isSaving} onPress={() => router.back()}>
+                    <Text style={styles.cancelButtonLabel}>Cancelar</Text>
+                </Pressable>
+            </ScrollView>
+        </KeyboardAvoidingView>
     );
 }
 
@@ -395,6 +428,13 @@ const styles = StyleSheet.create({
         marginBottom: 12,
         fontStyle: 'italic',
     },
+    errorText: {
+        color: '#ef4444',
+        fontSize: 13,
+        marginTop: -12,
+        marginBottom: 16,
+        marginLeft: 4,
+    },
     input: {
         backgroundColor: '#ffffff',
         borderWidth: 1,
@@ -419,10 +459,7 @@ const styles = StyleSheet.create({
         marginTop: -12,
         marginBottom: 16,
         overflow: 'hidden',
-        position: 'absolute',
-        top: 70, // Below the input field
-        left: 0,
-        right: 0,
+        // Se retiró el position: absolute para evitar el bug de recorte de toques en Android (Bounding Box Touch Clip)
         zIndex: 20,
         elevation: 5,
         boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.1)',

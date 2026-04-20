@@ -11,6 +11,7 @@ import { env } from './config/env.js';
 import { checkDbConnection, prisma } from './lib/prisma.js';
 import { AppError } from './errors/app-error.js';
 import { errorHandler } from './middlewares/error-handler.js';
+import path from 'path';
 
 const app = express();
 const port = env.PORT;
@@ -42,9 +43,10 @@ const corsOptions: CorsOptions = {
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions)); // importante para preflight
 
-app.use(helmet());
+app.use(helmet({ crossOriginResourcePolicy: false })); // Allow serving static files correctly
 app.use(morgan('dev'));
 app.use(express.json());
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
 // Servir archivos estáticos de la carpeta uploads
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));

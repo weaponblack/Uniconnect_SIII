@@ -1,56 +1,33 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { router } from 'expo-router';
-import { Alert, Pressable, StyleSheet, Text, View, TextInput, ScrollView, Image } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, View, TextInput, Image, ActivityIndicator, Platform } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { saveSession } from '@/lib/session';
 import { signInSimple } from '@/lib/auth-api';
-import { useAuth0 } from 'react-native-auth0';
+import { useGoogleAuth } from '@/hooks/useGoogleAuth';
 
 export default function SignUpScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [statusText, setStatusText] = useState<string>('');
-  const [loginMethod, setLoginMethod] = useState<'google' | 'simple' | null>(null);
+  const [loginMethod, setLoginMethod] = useState<'simple' | 'google'>('simple');
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
 
-  const { authorize, user, isLoading, getCredentials } = useAuth0();
+  const { user: googleUser, error: googleError, loading: googleLoading, request, signIn } = useGoogleAuth();
 
-  async function handleGoogleSignup() {
-    try {
-      setIsSubmitting(true);
-      setStatusText('Abriendo Auth0...');
-
-      await authorize({ scope: 'openid profile email' });
-
-      const credentials = await getCredentials();
-      if (credentials?.idToken) {
-        setStatusText('Iniciando sesión en el backend...');
-        
-        await saveSession({
-          user: {
-            id: 'auth0|' + Date.now().toString(),
-            name: user?.name || null,
-            email: user?.email || 'auth0@ejemplo.com',     
-            role: 'student',
-            avatarUrl: null
-          },
-          accessToken: credentials.idToken, // Usar el idToken (JWT) para que el backend lo reconozca
-          refreshToken: credentials.accessToken
-        });        setStatusText('Logueado, redirigiendo...');
-        setTimeout(() => {
-          router.replace('/dashboard');
-        }, 100);
-      } else {
-        setStatusText('No se recibió token.');
-      }
-    } catch (e: any) {
-      if (e.message !== 'a0.session.user_cancelled') {
-        Alert.alert('Error', e.message || 'Error al conectar con Auth0');
-      }
-      setStatusText('');
-    } finally {
-      setIsSubmitting(false);
+  // Navegar al dashboard cuando el login de Google sea exitoso
+  useEffect(() => {
+    if (googleUser) {
+      router.replace('/dashboard');
     }
-  }
+  }, [googleUser]);
+
+  // Mostrar error de Google si ocurre
+  useEffect(() => {
+    if (googleError) {
+      Alert.alert('Error de Google', googleError);
+    }
+  }, [googleError]);
 
   async function handleSimpleSignIn() {
     if (!email.trim()) {
@@ -79,14 +56,20 @@ export default function SignUpScreen() {
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <KeyboardAwareScrollView
+      style={{ flex: 1 }}
+      contentContainerStyle={styles.container}
+      enableOnAndroid={true}
+      extraScrollHeight={20}
+      keyboardShouldPersistTaps="handled"
+    >
       <View style={styles.logoContainer}>
         <Text style={styles.logoText}>UniConnect</Text>
       </View>
       <Text style={styles.title}>Iniciar Sesión</Text>
       <Text style={styles.subtitle}>Usa tu correo para acceder a UniConnect.</Text>
 
-      <View style={[styles.methodSelector, !loginMethod && styles.methodSelectorColumn]}>
+      <View style={styles.methodSelector}>
         <Pressable
           style={[
             styles.methodButton,
@@ -115,7 +98,33 @@ export default function SignUpScreen() {
         </Pressable>
       </View>
 
-      {loginMethod === 'simple' && (
+      {loginMethod === 'google' ? (
+        <>
+          {/* Botón directo de Google */}
+          {!request && !googleLoading ? (
+            <ActivityIndicator size="small" color="#003e70" style={{ marginBottom: 24 }} />
+          ) : googleLoading ? (
+            <ActivityIndicator size="large" color="#003e70" style={{ marginBottom: 24 }} />
+          ) : (
+            <Pressable
+              style={({ pressed }) => [
+                styles.googleButton,
+                { marginBottom: 24 },
+                pressed && styles.googleButtonDisabled,
+              ]}
+              onPress={signIn}>
+              <Image
+                source={{ uri: 'https://developers.google.com/identity/images/g-logo.png' }}
+                style={{ width: 24, height: 24 }}
+              />
+              <Text style={styles.googleLabel}>Iniciar sesión con Google</Text>
+            </Pressable>
+          )}
+          <Text style={{ textAlign: 'center', color: '#9ca3af', fontSize: 12, marginBottom: 24 }}>
+            Solo cuentas @ucaldas.edu.co
+          </Text>
+        </>
+      ) : (
         <View style={styles.formContainer}>
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Nombre completo</Text>
@@ -159,26 +168,10 @@ export default function SignUpScreen() {
         </View>
       )}
 
-      {loginMethod === 'google' && (
-        <Pressable
-          disabled={isSubmitting}
-          style={({ pressed }) => [
-            styles.googleButton,
-            (pressed || isSubmitting) && styles.googleButtonDisabled,
-          ]}
-          onPress={handleGoogleSignup}>
-          <Image
-            source={{ uri: 'https://developers.google.com/identity/images/g-logo.png' }}
-            style={{ width: 24, height: 24 }}
-          />
-          <Text style={styles.googleLabel}>
-            {isSubmitting ? 'Validando...' : 'Sign up with Google'}
-          </Text>
-        </Pressable>
-      )}
+      {googleError ? <Text style={styles.status}>{googleError}</Text> : null}
 
       {statusText ? <Text style={styles.status}>{statusText}</Text> : null}
-    </ScrollView>
+    </KeyboardAwareScrollView>
   );
 }
 

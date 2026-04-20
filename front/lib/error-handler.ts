@@ -31,7 +31,7 @@ export const errorHandler = (error: any) => {
     }
   } else if (error.request) {
     // La petición fue hecha pero no se recibió respuesta
-    errorMessage = 'No se pudo conectar con el servidor. Verifica tu conexión.';
+    errorMessage = `Falla de red hacia: ${error.config?.baseURL}${error.config?.url} (${error.message})`;
   } else {
     // Algo pasó al configurar la petición
     errorMessage = error.message || errorMessage;

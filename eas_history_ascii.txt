@@ -1,0 +1,1 @@
+2bfcd10 fix: include front as regular files and remove nested git
