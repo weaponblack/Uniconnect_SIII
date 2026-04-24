@@ -57,6 +57,11 @@ export default function StudyGroupsScreen() {
     const [resourceTitle, setResourceTitle] = useState('');
     const [resourceLink, setResourceLink] = useState('');
     const [isUploadingResource, setIsUploadingResource] = useState(false);
+    
+    // Leave group state
+    const [isLeaveModalVisible, setLeaveModalVisible] = useState(false);
+    const [selectedNewOwnerId, setSelectedNewOwnerId] = useState<string | null>(null);
+    const [isLeaving, setIsLeaving] = useState(false);
 
     const loadResources = async (groupId: string) => {
         setIsLoadingResources(true);
@@ -197,6 +202,38 @@ export default function StudyGroupsScreen() {
                     { text: 'Eliminar', style: 'destructive', onPress: () => void performRemove() },
                 ]
             );
+        }
+    };
+
+    const handleLeaveGroup = async () => {
+        if (!editingGroup || !session) return;
+        const isOwner = session.user.id === editingGroup.ownerId;
+        const otherMembers = editingGroup.members.filter(m => m.id !== session.user.id);
+
+        if (isOwner && otherMembers.length > 0 && !selectedNewOwnerId) {
+            setLeaveModalVisible(true);
+            return;
+        }
+
+        try {
+            setIsLeaving(true);
+            const result = await removeMemberFromStudyGroup(editingGroup.id, session.user.id, selectedNewOwnerId || undefined);
+            
+            if ('deleted' in result && result.deleted) {
+                setGroups(groups.filter(g => g.id !== editingGroup.id));
+            } else {
+                setGroups(groups.filter(g => g.id !== editingGroup.id));
+            }
+            
+            setEditingGroup(null);
+            setLeaveModalVisible(false);
+            setSelectedNewOwnerId(null);
+            showToast('Has salido del grupo', 'success');
+        } catch (error: any) {
+            console.error('Leave group error', error);
+            showToast(error.response?.data?.message || 'No se pudo salir del grupo', 'error');
+        } finally {
+            setIsLeaving(false);
         }
     };
 
@@ -496,6 +533,39 @@ export default function StudyGroupsScreen() {
                                 </View>
                             </View>
                         ))}
+                        
+                        <Pressable
+                            style={[styles.leaveButton, { marginTop: 16 }]}
+                            onPress={() => {
+                                const isOwner = session.user.id === editingGroup.ownerId;
+                                const otherMembers = editingGroup.members.filter(m => m.id !== session.user.id);
+                                
+                                if (isOwner && otherMembers.length > 0) {
+                                    setLeaveModalVisible(true);
+                                } else {
+                                    if (Platform.OS === 'web') {
+                                        if (window.confirm('¿Seguro que deseas salir de este grupo?')) {
+                                            void handleLeaveGroup();
+                                        }
+                                    } else {
+                                        const { Alert } = require('react-native');
+                                        Alert.alert(
+                                            'Salir del grupo',
+                                            '¿Seguro que deseas salir de este grupo?',
+                                            [
+                                                { text: 'Cancelar', style: 'cancel' },
+                                                { text: 'Salir', style: 'destructive', onPress: () => void handleLeaveGroup() },
+                                            ]
+                                        );
+                                    }
+                                }
+                            }}
+                            disabled={isLeaving}
+                        >
+                            <Text style={styles.leaveButtonText}>
+                                {isLeaving ? 'Saliendo...' : 'Salir del grupo'}
+                            </Text>
+                        </Pressable>
                     </View>
 
                     {session.user.id === editingGroup.ownerId && (
@@ -628,6 +698,64 @@ export default function StudyGroupsScreen() {
                                 </View>
                             </View>
                         </KeyboardAvoidingView>
+                    </Modal>
+                    {/* Leave Group / Pick Admin Modal */}
+                    <Modal
+                        visible={isLeaveModalVisible}
+                        animationType="slide"
+                        transparent={true}
+                        onRequestClose={() => setLeaveModalVisible(false)}
+                    >
+                        <View style={styles.modalOverlay}>
+                            <View style={styles.modalContent}>
+                                <Text style={styles.modalTitle}>Salir del grupo</Text>
+                                <Text style={styles.subtitle}>Como eres el administrador, debes elegir a un nuevo administrador antes de salir.</Text>
+                                
+                                <ScrollView style={{ maxHeight: 300, marginBottom: 16 }}>
+                                    {editingGroup.members
+                                        .filter(m => m.id !== session.user.id)
+                                        .map(member => (
+                                            <Pressable
+                                                key={member.id}
+                                                style={[
+                                                    styles.adminSelectItem,
+                                                    selectedNewOwnerId === member.id && styles.adminSelectItemActive
+                                                ]}
+                                                onPress={() => setSelectedNewOwnerId(member.id)}
+                                            >
+                                                <Text style={[
+                                                    styles.adminSelectName,
+                                                    selectedNewOwnerId === member.id && styles.adminSelectNameActive
+                                                ]}>
+                                                    {member.name || member.email}
+                                                </Text>
+                                                <Text style={styles.adminSelectCareer}>{member.career}</Text>
+                                                {selectedNewOwnerId === member.id && (
+                                                    <Ionicons name="checkmark-circle" size={24} color="#ffffff" style={{ position: 'absolute', right: 12 }} />
+                                                )}
+                                            </Pressable>
+                                        ))
+                                    }
+                                </ScrollView>
+
+                                <View style={styles.modalActions}>
+                                    <Pressable
+                                        style={[styles.modalButton, styles.cancelModalButton]}
+                                        onPress={() => { setLeaveModalVisible(false); setSelectedNewOwnerId(null); }}
+                                        disabled={isLeaving}
+                                    >
+                                        <Text style={styles.cancelModalButtonText}>Cancelar</Text>
+                                    </Pressable>
+                                    <Pressable
+                                        style={[styles.modalButton, styles.saveModalButton, !selectedNewOwnerId && { opacity: 0.5 }]}
+                                        onPress={handleLeaveGroup}
+                                        disabled={isLeaving || !selectedNewOwnerId}
+                                    >
+                                        <Text style={styles.saveModalButtonText}>{isLeaving ? 'Procesando...' : 'Confirmar y Salir'}</Text>
+                                    </Pressable>
+                                </View>
+                            </View>
+                        </View>
                     </Modal>
                 </ScrollView>
             </KeyboardAvoidingView>
@@ -1168,5 +1296,45 @@ const styles = StyleSheet.create({
     },
     typeButtonTextActive: {
         color: '#ffffff',
+    },
+    leaveButton: {
+        backgroundColor: '#ffffff',
+        borderWidth: 1,
+        borderColor: '#64748b',
+        paddingVertical: 10,
+        borderRadius: 8,
+        alignItems: 'center',
+    },
+    leaveButtonText: {
+        color: '#64748b',
+        fontWeight: '600',
+        fontSize: 14,
+    },
+    adminSelectItem: {
+        backgroundColor: '#f8fafc',
+        borderWidth: 1,
+        borderColor: '#cbd5e1',
+        borderRadius: 8,
+        padding: 12,
+        marginBottom: 8,
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    adminSelectItemActive: {
+        backgroundColor: '#003e70',
+        borderColor: '#003e70',
+    },
+    adminSelectName: {
+        fontSize: 15,
+        fontWeight: '600',
+        color: '#0f172a',
+    },
+    adminSelectNameActive: {
+        color: '#ffffff',
+    },
+    adminSelectCareer: {
+        fontSize: 12,
+        color: '#64748b',
+        marginLeft: 8,
     },
 });

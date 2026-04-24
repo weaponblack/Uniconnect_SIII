@@ -8,7 +8,6 @@ import {
 } from './study-group.service.js';
 import { createStudyGroupSchema, updateStudyGroupSchema, addMembersSchema, respondToRequestSchema } from './study-group.schemas.js';
 import { catchAsync } from '../../lib/catch-async.js';
-import { AppError } from '../../errors/app-error.js';
 
 export const createStudyGroupHandler = catchAsync(async (req: Request, res: Response) => {
     const payload = req.user!;
@@ -70,8 +69,9 @@ export const removeMemberFromGroupHandler = catchAsync(async (req: Request, res:
     const userId = req.user!.sub;
     const groupId = req.params.groupId;
     const memberId = req.params.memberId;
+    const { newOwnerId } = req.body;
 
-    const updatedGroup = await removeMemberFromGroup(userId, groupId, memberId, req.user);
+    const updatedGroup = await removeMemberFromGroup(userId, groupId, memberId, req.user, newOwnerId);
     res.json(updatedGroup);
 });
 
@@ -176,5 +176,4 @@ export async function respondToRequestHandler(req: Request, res: Response, next:
 import * as service from './study-group.service.js';
 function getService() {
     return service;
-}
 }

@@ -11,7 +11,6 @@ import { env } from './config/env.js';
 import { checkDbConnection, prisma } from './lib/prisma.js';
 import { AppError } from './errors/app-error.js';
 import { errorHandler } from './middlewares/error-handler.js';
-import path from 'path';
 
 const app = express();
 const port = env.PORT;

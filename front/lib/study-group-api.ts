@@ -66,8 +66,10 @@ export async function deleteStudyGroup(groupId: string): Promise<void> {
     await apiClient.delete(`/groups/${groupId}`);
 }
 
-export async function removeMemberFromStudyGroup(groupId: string, memberId: string): Promise<StudyGroup> {
-    const response = await apiClient.delete<StudyGroup>(`/groups/${groupId}/members/${memberId}`);
+export async function removeMemberFromStudyGroup(groupId: string, memberId: string, newOwnerId?: string): Promise<StudyGroup> {
+    const response = await apiClient.delete<StudyGroup>(`/groups/${groupId}/members/${memberId}`, {
+        data: { newOwnerId }
+    });
     return response.data;
 }
 

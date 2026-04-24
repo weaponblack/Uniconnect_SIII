@@ -77,34 +77,38 @@ export async function getStudentStudyGroups(studentId: string, payload?: any) {
 
 export async function getDiscoverableStudyGroups(studentId: string, payload?: any) {
     let dbStudentId = studentId;
-    let studentCareer: string | null = null;
 
     if (payload && payload.email) {
         const student = await prisma.user.findUnique({
             where: { email: payload.email },
-            select: { id: true, career: true },
+            select: { id: true },
         });
         if (student) {
             dbStudentId = student.id;
-            studentCareer = student.career;
         }
-    } else {
-        const student = await prisma.user.findUnique({
-            where: { id: studentId },
-            select: { career: true },
-        });
-        studentCareer = student?.career || null;
     }
 
-    // Restriction: students can only see groups created by members of their same career
-    if (!studentCareer) {
-        return []; // Return empty if student has no career assigned?
+    // Get the current student's subjects
+    const student = await prisma.user.findUnique({
+        where: { id: dbStudentId },
+        include: { subjects: true }
+    });
+
+    if (!student || student.subjects.length === 0) {
+        return []; // Return empty if student has no subjects assigned
     }
 
+    const subjectIds = student.subjects.map(s => s.id);
+
+    // Filter groups where the owner has at least one common subject with the student
     return prisma.studyGroup.findMany({
         where: {
             owner: {
-                career: studentCareer
+                subjects: {
+                    some: {
+                        id: { in: subjectIds }
+                    }
+                }
             },
             members: {
                 none: {
@@ -210,7 +214,7 @@ export async function addMembersToGroup(groupId: string, ownerId: string, data: 
     });
 }
 
-export async function removeMemberFromGroup(ownerId: string, groupId: string, memberIdToRemove: string, payload?: any) {
+export async function removeMemberFromGroup(ownerId: string, groupId: string, memberIdToRemove: string, payload?: any, newOwnerId?: string) {
     let dbOwnerId = ownerId;
     if (payload && payload.email) {
         const existing = await prisma.user.findUnique({
@@ -228,21 +232,31 @@ export async function removeMemberFromGroup(ownerId: string, groupId: string, me
     if (!group) throw new AppError(404, 'Study group not found');
     
     // Check if the person making the request is valid
+    // A member can remove themselves, or the owner can remove any member
     if (dbOwnerId !== memberIdToRemove && group.ownerId !== dbOwnerId) {
-        throw new AppError(403, 'Only the owner can remove other members');
+        throw new AppError(403, 'Solo el administrador puede eliminar a otros miembros');
     }
 
     // Attempting to remove self or owner leaving
     if (memberIdToRemove === group.ownerId) {
-        // If there are other members, give it to the oldest member
         const otherMembers = group.members.filter(m => m.id !== group.ownerId);
         
         if (otherMembers.length > 0) {
-            const nextOwner = otherMembers[0];
+            // Requirement: if admin leaves, they MUST choose a new admin
+            if (!newOwnerId) {
+                throw new AppError(400, 'Como eres el administrador, debes elegir un nuevo administrador antes de salir del grupo');
+            }
+
+            // Verify newOwnerId is a member of the group
+            const isMember = otherMembers.some(m => m.id === newOwnerId);
+            if (!isMember) {
+                throw new AppError(400, 'El nuevo administrador debe ser un miembro del grupo');
+            }
+
             return prisma.studyGroup.update({
                 where: { id: groupId },
                 data: {
-                    ownerId: nextOwner.id,
+                    ownerId: newOwnerId,
                     members: {
                         disconnect: { id: memberIdToRemove }
                     }
