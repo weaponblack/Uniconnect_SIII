@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { catchAsync } from '../../lib/catch-async.js';
-import { createPost, getGroupPosts, togglePinPost, deletePost, addComment } from './post.service.js';
+import { createPost, getGroupPosts, togglePinPost, deletePost, addComment, deleteResource } from './post.service.js';
 import { createPostSchema, addCommentSchema } from './post.schemas.js';
 
 export const createPostHandler = catchAsync(async (req: Request, res: Response) => {
@@ -44,4 +44,11 @@ export const addCommentHandler = catchAsync(async (req: Request, res: Response) 
 
     const newComment = await addComment(groupId, postId, authorId, data.content, req.user);
     res.status(201).json(newComment);
+});
+
+export const deleteResourceHandler = catchAsync(async (req: Request, res: Response) => {
+    const { groupId, postId, resourceId } = req.params;
+    const userId = req.user!.sub;
+    await deleteResource(groupId, postId, resourceId, userId, req.user);
+    res.status(204).send();
 });

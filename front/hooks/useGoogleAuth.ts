@@ -53,7 +53,7 @@ export function useGoogleAuth() {
 
     const [request, response, promptAsync] = Google.useAuthRequest({
         webClientId,
-        androidClientId: Platform.OS === 'android' ? iosClientId : androidClientId,
+        androidClientId,
         iosClientId,
         redirectUri,
         extraParams: {

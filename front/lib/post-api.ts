@@ -75,5 +75,10 @@ export const postApi = {
   addComment: async (groupId: string, postId: string, content: string) => {
     const response = await apiClient.post(`/groups/${groupId}/posts/${postId}/comments`, { content });
     return response.data.data;
+  },
+
+  deleteResource: async (groupId: string, postId: string, resourceId: string) => {
+    const response = await apiClient.delete(`/groups/${groupId}/posts/${postId}/resources/${resourceId}`);
+    return response.data;
   }
 };

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, Pressable, TextInput, Modal, ActivityIndicator, Linking } from 'react-native';
+import { View, Text, StyleSheet, FlatList, Pressable, TextInput, Modal, ActivityIndicator, Linking, Keyboard, TouchableWithoutFeedback, ScrollView } from 'react-native';
 import { useLocalSearchParams, Stack, router } from 'expo-router';
 import { postApi, type Post } from '@/lib/post-api';
 import * as DocumentPicker from 'expo-document-picker';
@@ -11,7 +11,7 @@ import { useToast } from '@/components/Toast';
 import { authConfig } from '@/constants/AuthConfig';
 
 export default function StudyGroupWall() {
-  const { id, title } = useLocalSearchParams<{ id: string, title?: string }>();
+  const { id, title, ownerId: groupOwnerId } = useLocalSearchParams<{ id: string, title?: string, ownerId?: string }>();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState<SessionData | null>(null);
@@ -114,6 +114,31 @@ export default function StudyGroupWall() {
       });
   };
 
+  const handleDeleteResource = async (postId: string, resourceId: string) => {
+      try {
+          await postApi.deleteResource(id, postId, resourceId);
+          setPosts(prev => prev.map(p => {
+              if (p.id !== postId) return p;
+              return { ...p, resources: (p as any).resources.filter((r: any) => r.id !== resourceId) };
+          }));
+          showToast('Recurso eliminado', 'success');
+      } catch (error) {
+          console.error(error);
+          showToast('No se pudo eliminar el recurso', 'error');
+      }
+  };
+
+  const handleDeletePost = async (postId: string) => {
+      try {
+          await postApi.deletePost(id, postId);
+          setPosts(prev => prev.filter(p => p.id !== postId));
+          showToast('Publicación eliminada', 'success');
+      } catch (error) {
+          console.error(error);
+          showToast('No se pudo eliminar la publicación', 'error');
+      }
+  };
+
   const renderPost = ({ item }: { item: Post }) => (
     <View style={[styles.postCard, item.isPinned && styles.pinnedCard]}>
       <View style={styles.postHeader}>
@@ -126,25 +151,47 @@ export default function StudyGroupWall() {
       <View style={styles.typeBadge}>
         <Text style={styles.typeText}>{item.type}</Text>
       </View>
-      <Text style={styles.postTitle}>{item.title || item.type}</Text>
+      {!!(item as any).title && (
+          <Text style={styles.postTitle}>{(item as any).title}</Text>
+      )}
       <Text style={styles.postContent}>{item.content}</Text>
       
       {(item as any).resources && (item as any).resources.length > 0 && (
           <View style={styles.filesContainer}>
              <Text style={{fontWeight: 'bold', marginBottom: 5, fontSize: 12}}>Archivos adjuntos:</Text>
              {(item as any).resources.map((res: any, i: number) => (
-                 <Pressable key={i} onPress={() => openFile(res.url)} style={{flexDirection: 'row', alignItems: 'center', marginBottom: 5}}>
-                     <Ionicons name="document-attach" size={16} color={Colors.light.tint} />
-                     <Text style={styles.fileLink}>  {res.title}</Text>
-                 </Pressable>
+                 <View key={res.id || i} style={{flexDirection: 'row', alignItems: 'center', marginBottom: 5}}>
+                     <Pressable onPress={() => openFile(res.url)} style={{flexDirection: 'row', alignItems: 'center', flex: 1}}>
+                         <Ionicons name="document-attach" size={16} color={Colors.light.tint} />
+                         <Text style={[styles.fileLink, {flex: 1}]} numberOfLines={1}>  {res.title}</Text>
+                     </Pressable>
+                     {(session?.user?.id === item.authorId || session?.user?.id === groupOwnerId) && (
+                         <Pressable
+                             onPress={() => handleDeleteResource(item.id, res.id)}
+                             style={{marginLeft: 8, padding: 4}}
+                         >
+                             <Ionicons name="trash-outline" size={16} color="#ef4444" />
+                         </Pressable>
+                     )}
+                 </View>
              ))}
           </View>
       )}
 
-      {session?.user?.id === item.authorId && (
-          <Pressable onPress={() => togglePin(item.id)} style={{marginTop: 15, alignSelf: 'flex-end'}}>
-              <Text style={{color: Colors.light.tint, fontSize: 12, fontWeight: 'bold'}}>{item.isPinned ? "Desfijar" : "Fijar Post"}</Text>
-          </Pressable>
+      {(session?.user?.id === item.authorId || session?.user?.id === groupOwnerId) && (
+          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', marginTop: 15, gap: 16 }}>
+              {session?.user?.id === item.authorId && (
+                  <Pressable onPress={() => togglePin(item.id)}>
+                      <Text style={{ color: Colors.light.tint, fontSize: 12, fontWeight: 'bold' }}>
+                          {item.isPinned ? 'Desfijar' : 'Fijar Post'}
+                      </Text>
+                  </Pressable>
+              )}
+              <Pressable onPress={() => handleDeletePost(item.id)} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Ionicons name="trash-outline" size={14} color="#ef4444" />
+                  <Text style={{ color: '#ef4444', fontSize: 12, fontWeight: 'bold' }}>Eliminar</Text>
+              </Pressable>
+          </View>
       )}
     </View>
   );
@@ -169,47 +216,57 @@ export default function StudyGroupWall() {
           <Ionicons name="add" size={28} color="#fff" />
       </Pressable>
 
-      <Modal visible={isModalVisible} animationType="fade" transparent>
+      <Modal visible={isModalVisible} animationType="fade" transparent onRequestClose={() => setModalVisible(false)}>
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
         <View style={styles.modalOverlay}>
+           <TouchableWithoutFeedback onPress={(e) => e.stopPropagation?.()}>
            <View style={styles.modalContent}>
-               <Text style={styles.modalTitle}>Nueva Publicación</Text>
-               <TextInput style={styles.input} placeholder="Título de la publicación (ej. Resumen de cálculo)" value={postTitle} onChangeText={setPostTitle} />
-               <TextInput style={[styles.input, {height: 80, textAlignVertical: 'top'}]} placeholder="Escribe el contenido..." multiline value={postContent} onChangeText={setPostContent} />
-               
-               <Text style={{fontSize: 12, marginBottom: 5, fontWeight: 'bold'}}>Etiqueta:</Text>
-               <View style={styles.typeSelector}>
-                   {['GENERAL', 'PREGUNTA', 'MATERIAL', 'AVISO'].map(t => (
-                       <Pressable key={t} onPress={() => setPostType(t)} style={[styles.typeButton, postType === t && styles.activeType]}>
-                           <Text style={[styles.typeButtonText, postType === t && styles.activeTypeText]}>{t}</Text>
-                       </Pressable>
-                   ))}
-               </View>
-
-               <Text style={{fontSize: 12, marginTop: 10, marginBottom: 5, fontWeight: 'bold'}}>Adjuntos:</Text>
-               <View style={styles.actions}>
-                   <Pressable onPress={handlePickDocument} style={styles.attachBtn}><Ionicons name="document-text" size={20} color="#555" /><Text> Documento</Text></Pressable>
-                   <Pressable onPress={handlePickImage} style={styles.attachBtn}><Ionicons name="image" size={20} color="#555" /><Text> Foto</Text></Pressable>
-               </View>
-
-               {files.length > 0 && (
-                   <View style={styles.fileList}>
-                       {files.map((f, i) => (
-                           <View key={i} style={styles.fileItem}>
-                               <Text numberOfLines={1} style={{flex: 1, fontSize: 12}}>{f.name || f.fileName || 'Archivo adjunto'}</Text>
-                               <Pressable onPress={() => removeFile(i)}><Ionicons name="close-circle" size={20} color="red" /></Pressable>
-                           </View>
+               <ScrollView
+                   keyboardShouldPersistTaps="handled"
+                   showsVerticalScrollIndicator={false}
+                   style={{ flexShrink: 1 }}
+               >
+                   <Text style={styles.modalTitle}>Nueva Publicación</Text>
+                   <TextInput style={styles.input} placeholder="Título de la publicación (ej. Resumen de cálculo)" value={postTitle} onChangeText={setPostTitle} />
+                   <TextInput style={[styles.input, {height: 80, textAlignVertical: 'top'}]} placeholder="Escribe el contenido..." multiline value={postContent} onChangeText={setPostContent} />
+                   
+                   <Text style={{fontSize: 12, marginBottom: 5, fontWeight: 'bold'}}>Etiqueta:</Text>
+                   <View style={styles.typeSelector}>
+                       {['GENERAL', 'PREGUNTA', 'MATERIAL', 'AVISO'].map(t => (
+                           <Pressable key={t} onPress={() => setPostType(t)} style={[styles.typeButton, postType === t && styles.activeType]}>
+                               <Text style={[styles.typeButtonText, postType === t && styles.activeTypeText]}>{t}</Text>
+                           </Pressable>
                        ))}
                    </View>
-               )}
 
-               <View style={styles.modalActions}>
-                  <Pressable style={[styles.btn, {backgroundColor: '#e5e7eb'}]} onPress={() => setModalVisible(false)}><Text style={{color: '#374151', fontWeight: 'bold'}}>Cancelar</Text></Pressable>
-                  <Pressable style={[styles.btn, {backgroundColor: Colors.light.tint, opacity: isPosting ? 0.5 : 1}]} onPress={handleCreatePost} disabled={isPosting}>
-                      <Text style={{color: '#fff', fontWeight: 'bold'}}>{isPosting ? 'Publicando...' : 'Publicar'}</Text>
-                  </Pressable>
-               </View>
+                   <Text style={{fontSize: 12, marginTop: 10, marginBottom: 5, fontWeight: 'bold'}}>Adjuntos:</Text>
+                   <View style={styles.actions}>
+                       <Pressable onPress={handlePickDocument} style={styles.attachBtn}><Ionicons name="document-text" size={20} color="#555" /><Text> Documento</Text></Pressable>
+                       <Pressable onPress={handlePickImage} style={styles.attachBtn}><Ionicons name="image" size={20} color="#555" /><Text> Foto</Text></Pressable>
+                   </View>
+
+                   {files.length > 0 && (
+                       <View style={styles.fileList}>
+                           {files.map((f, i) => (
+                               <View key={i} style={styles.fileItem}>
+                                   <Text numberOfLines={1} style={{flex: 1, fontSize: 12}}>{f.name || f.fileName || 'Archivo adjunto'}</Text>
+                                   <Pressable onPress={() => removeFile(i)}><Ionicons name="close-circle" size={20} color="red" /></Pressable>
+                               </View>
+                           ))}
+                       </View>
+                   )}
+
+                   <View style={styles.modalActions}>
+                      <Pressable style={[styles.btn, {backgroundColor: '#e5e7eb'}]} onPress={() => { Keyboard.dismiss(); setModalVisible(false); }}><Text style={{color: '#374151', fontWeight: 'bold'}}>Cancelar</Text></Pressable>
+                      <Pressable style={[styles.btn, {backgroundColor: Colors.light.tint, opacity: isPosting ? 0.5 : 1}]} onPress={handleCreatePost} disabled={isPosting}>
+                          <Text style={{color: '#fff', fontWeight: 'bold'}}>{isPosting ? 'Publicando...' : 'Publicar'}</Text>
+                      </Pressable>
+                   </View>
+               </ScrollView>
            </View>
+           </TouchableWithoutFeedback>
         </View>
+        </TouchableWithoutFeedback>
       </Modal>
     </View>
   );

@@ -51,6 +51,7 @@ export async function createPost(groupId: string, authorId: string, data: any, f
 
     return prisma.post.create({
         data: {
+            title: data.title,
             content: data.content,
             type: data.type,
             isPinned,
@@ -139,4 +140,28 @@ export async function addComment(groupId: string, postId: string, authorId: stri
         },
         include: { author: { select: { id: true, name: true, email: true, avatarUrl: true } } }
     });
+}
+
+export async function deleteResource(groupId: string, postId: string, resourceId: string, userId: string, payload?: any) {
+    const { isOwner, actualUserId } = await checkMembership(groupId, userId, payload);
+    userId = actualUserId;
+
+    const post = await prisma.post.findUnique({ where: { id: postId, groupId } });
+    if (!post) throw new AppError(404, 'Post no encontrado');
+
+    const resource = await prisma.resource.findUnique({ where: { id: resourceId } });
+    if (!resource) throw new AppError(404, 'Recurso no encontrado');
+
+    // Only post author or group owner can delete a resource
+    const authUser = await prisma.user.findUnique({ where: { id: userId } });
+    if (!authUser) throw new AppError(404, 'Usuario no encontrado');
+    const userEmail = authUser.email.toLowerCase().trim();
+    const actualAuthor = await prisma.user.findUnique({ where: { id: post.authorId } });
+    const isAuthor = (post.authorId === userId) || (actualAuthor?.email.toLowerCase().trim() === userEmail);
+
+    if (!isAuthor && !isOwner) {
+        throw new AppError(403, 'No tienes permiso para eliminar este recurso');
+    }
+
+    return prisma.resource.delete({ where: { id: resourceId } });
 }

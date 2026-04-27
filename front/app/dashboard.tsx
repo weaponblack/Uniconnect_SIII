@@ -46,7 +46,7 @@ export default function DashboardScreen() {
         router.replace('/');
       }, 0);
     }
-  }  if (isLoading) {
+  } if (isLoading) {
     return (
       <View style={styles.loaderContainer}>
         <ActivityIndicator />
@@ -99,7 +99,7 @@ export default function DashboardScreen() {
       </View>
 
       <Pressable style={styles.actionButton} onPress={() => router.push('/study-groups')}>
-        <Text style={styles.actionButtonLabel}>Mis Grupos de Estudio</Text>
+        <Text style={styles.actionButtonLabel}>Grupos de Estudio</Text>
       </Pressable>
 
       <Pressable style={styles.logoutButton} disabled={isLoggingOut} onPress={handleLogout}>

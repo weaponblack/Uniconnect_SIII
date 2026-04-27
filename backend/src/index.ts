@@ -10,10 +10,15 @@ import { studyGroupRouter } from './modules/study-group/study-group.routes.js';
 import { env } from './config/env.js';
 import { checkDbConnection, prisma } from './lib/prisma.js';
 import { AppError } from './errors/app-error.js';
+import http from 'http';
 import { errorHandler } from './middlewares/error-handler.js';
+import { initSocketServer } from './lib/socket.js';
 
 const app = express();
+const server = http.createServer(app);
 const port = env.PORT;
+
+initSocketServer(server);
 
 const allowedOrigins = new Set([
   'http://localhost:8081',
@@ -83,8 +88,8 @@ async function bootstrap() {
     isDatabaseConnected = true;
     console.log('Database connection: OK');
 
-    app.listen(port, '0.0.0.0', () => {
-      console.log(`API running on http://0.0.0.0:${port}`);
+    server.listen(port, '0.0.0.0', () => {
+      console.log(`API + WebSocket running on http://0.0.0.0:${port}`);
       console.log(`API accessible on local network at http://<this-machine-ip>:${port}`);
     });
   } catch (error) {

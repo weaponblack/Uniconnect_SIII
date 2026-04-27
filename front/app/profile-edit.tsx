@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableWithoutFeedback, View } from 'react-native';
 import { useToast } from '@/components/Toast';
 import { router } from 'expo-router';
 import { getStudentProfile, updateStudentProfile, type StudentProfile } from '@/lib/student-api';
@@ -268,6 +268,14 @@ export default function ProfileEditScreen() {
         );
     }
 
+    const anyDropdownOpen = showCarreras || showSubjects;
+
+    const closeDropdowns = () => {
+        setShowCarreras(false);
+        setShowSubjects(false);
+        Keyboard.dismiss();
+    };
+
     return (
         <View ref={rootViewRef} style={{ flex: 1 }}>
             <ScrollView
@@ -378,6 +386,14 @@ export default function ProfileEditScreen() {
                     <Text style={styles.cancelButtonLabel}>Cancelar</Text>
                 </Pressable>
             </ScrollView>
+
+            {/* Overlay transparente: captura toques fuera del dropdown para cerrarlo */}
+            {anyDropdownOpen && (
+                <Pressable
+                    style={styles.dropdownOverlay}
+                    onPress={closeDropdowns}
+                />
+            )}
 
             {/* ===== DROPDOWNS FLOTANTES — renderizados FUERA del ScrollView ===== */}
             {/* Esto permite position:absolute + toque correcto en Android/iOS    */}
@@ -505,6 +521,14 @@ const styles = StyleSheet.create({
         fontSize: 12,
         marginBottom: 12,
         marginTop: -2,
+    },
+    dropdownOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 99,
     },
     suggestionsContainer: {
         maxHeight: 200,

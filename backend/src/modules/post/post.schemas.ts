@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 export const createPostSchema = z.object({
+    title: z.string().optional(),
     content: z.string().min(1, 'El contenido no puede estar vacío'),
     type: z.enum(['GENERAL', 'PREGUNTA', 'MATERIAL', 'AVISO']).default('GENERAL')
 });

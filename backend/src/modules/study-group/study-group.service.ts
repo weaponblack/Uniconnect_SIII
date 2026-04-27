@@ -1,5 +1,6 @@
-import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../errors/app-error.js';
+import { getSocketIO } from '../../lib/socket.js';
+import { prisma } from '../../lib/prisma.js';
 import type { CreateStudyGroupInput, UpdateStudyGroupInput, AddMembersInput } from './study-group.schemas.js';
 
 export async function createStudyGroup(ownerId: string, data: CreateStudyGroupInput, payload?: any) {
@@ -402,4 +403,173 @@ export async function respondToGroupRequest(ownerId: string, groupId: string, re
     }
 
     return updatedRequest;
+}
+
+// ============== TRANSFER OWNERSHIP + LEAVE GROUP ==============
+
+export async function requestTransferOwnership(requesterId: string, groupId: string, newOwnerId: string, payload?: any) {
+    let dbRequesterId = requesterId;
+    if (payload && payload.email) {
+        const existing = await prisma.user.findUnique({ where: { email: payload.email }, select: { id: true } });
+        if (existing) dbRequesterId = existing.id;
+    }
+
+    const group = await prisma.studyGroup.findUnique({
+        where: { id: groupId },
+        include: { members: { select: { id: true } } }
+    });
+
+    if (!group) throw new AppError(404, 'Grupo de estudio no encontrado');
+    if (group.ownerId !== dbRequesterId) throw new AppError(403, 'Solo el administrador puede transferir la administración');
+
+    const isMember = group.members.some(m => m.id === newOwnerId);
+    if (!isMember) throw new AppError(400, 'El nuevo administrador debe ser miembro del grupo');
+    if (newOwnerId === dbRequesterId) throw new AppError(400, 'No puedes transferirte la administración a ti mismo');
+
+    // Check if there is already a pending request
+    const existingReq = await prisma.groupTransferRequest.findFirst({
+        where: { groupId, status: 'PENDING' }
+    });
+    if (existingReq) {
+        throw new AppError(400, 'Ya existe una solicitud de transferencia pendiente.');
+    }
+
+    const request = await prisma.groupTransferRequest.create({
+        data: {
+            groupId,
+            ownerId: dbRequesterId,
+            newOwnerId,
+            status: 'PENDING'
+        },
+        include: { group: true }
+    });
+
+    try {
+        const notification = await prisma.notification.create({
+            data: {
+                userId: newOwnerId,
+                type: 'ADMIN_TRANSFER_REQUEST',
+                message: `El dueño de '${request.group.name}' quiere transferirte la administración del grupo.`
+            }
+        });
+
+        const io = getSocketIO();
+        io.to(newOwnerId).emit('notification', notification);
+        io.to(newOwnerId).emit('transferRequest', request);
+    } catch(e) {
+        console.error('Socket error during transfer request', e);
+    }
+
+    return request;
+}
+
+export async function respondToTransferRequest(userId: string, requestId: string, status: 'ACCEPTED' | 'REJECTED', payload?: any) {
+    let dbUserId = userId;
+    if (payload && payload.email) {
+        const existing = await prisma.user.findUnique({ where: { email: payload.email }, select: { id: true } });
+        if (existing) dbUserId = existing.id;
+    }
+
+    const request = await prisma.groupTransferRequest.findUnique({
+        where: { id: requestId },
+        include: { group: true }
+    });
+
+    if (!request || request.newOwnerId !== dbUserId) throw new AppError(404, 'Solicitud no encontrada');
+    if (request.status !== 'PENDING') throw new AppError(400, 'La solicitud ya fue procesada');
+
+    const updatedRequest = await prisma.groupTransferRequest.update({
+        where: { id: requestId },
+        data: { status }
+    });
+
+    if (status === 'ACCEPTED') {
+        // Transfer ownership
+        await prisma.studyGroup.update({
+            where: { id: request.groupId },
+            data: { ownerId: dbUserId }
+        });
+        
+        // Remove old owner
+        await prisma.studyGroup.update({
+            where: { id: request.groupId },
+            data: { members: { disconnect: { id: request.ownerId } } }
+        });
+
+        try {
+            const notification = await prisma.notification.create({
+                data: {
+                    userId: request.ownerId,
+                    type: 'ADMIN_TRANSFER_ACCEPTED',
+                    message: `${payload?.name || 'Un usuario'} aceptó administrar '${request.group.name}'. Has abandonado el grupo.`
+                }
+            });
+            const io = getSocketIO();
+            io.to(request.ownerId).emit('notification', notification);
+            io.to(request.ownerId).emit('transferAccepted', updatedRequest);
+        } catch(e) { console.error(e) }
+    } else {
+        try {
+            const notification = await prisma.notification.create({
+                data: {
+                    userId: request.ownerId,
+                    type: 'ADMIN_TRANSFER_REJECTED',
+                    message: `Se rechazó tu solicitud para administrar '${request.group.name}'.`
+                }
+            });
+            const io = getSocketIO();
+            io.to(request.ownerId).emit('notification', notification);
+            io.to(request.ownerId).emit('transferRejected', updatedRequest);
+        } catch (e) { console.error(e) }
+    }
+
+    return updatedRequest;
+}
+
+export async function getPendingTransferForGroup(ownerId: string, groupId: string, payload?: any) {
+    let dbOwnerId = ownerId;
+    if (payload && payload.email) {
+        const existing = await prisma.user.findUnique({ where: { email: payload.email }, select: { id: true } });
+        if (existing) dbOwnerId = existing.id;
+    }
+
+    return prisma.groupTransferRequest.findFirst({
+        where: { groupId, ownerId: dbOwnerId, status: 'PENDING' },
+        include: { newOwner: { select: { name: true, email: true } } }
+    });
+}
+
+export async function leaveStudyGroup(userId: string, groupId: string, payload?: any) {
+    let dbUserId = userId;
+    if (payload && payload.email) {
+        const existing = await prisma.user.findUnique({ where: { email: payload.email }, select: { id: true } });
+        if (existing) dbUserId = existing.id;
+    }
+
+    const group = await prisma.studyGroup.findUnique({
+        where: { id: groupId },
+        include: { members: { select: { id: true } } }
+    });
+
+    if (!group) throw new AppError(404, 'Grupo de estudio no encontrado');
+
+    const isMember = group.members.some(m => m.id === dbUserId);
+    if (!isMember) throw new AppError(400, 'No eres miembro de este grupo');
+
+    if (group.ownerId === dbUserId) {
+        throw new AppError(400, 'Debes transferir la administración antes de abandonar el grupo');
+    }
+
+    const remainingCount = group.members.length - 1;
+    if (remainingCount === 0) {
+        await prisma.studyGroup.delete({ where: { id: groupId } });
+        return { deleted: true };
+    }
+
+    await prisma.studyGroup.update({
+        where: { id: groupId },
+        data: { members: { disconnect: { id: dbUserId } } }
+    });
+
+    return { left: true };
 }

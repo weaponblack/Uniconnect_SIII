@@ -6,7 +6,8 @@ import {
     getGroupPostsHandler,
     togglePinPostHandler,
     deletePostHandler,
-    addCommentHandler
+    addCommentHandler,
+    deleteResourceHandler
 } from './post.controller.js';
 
 // We need mergeParams: true to access :groupId from the parent router
@@ -22,3 +23,4 @@ postRouter.post('/', upload.array('files', 5), createPostHandler);
 postRouter.put('/:postId/pin', togglePinPostHandler);
 postRouter.delete('/:postId', deletePostHandler);
 postRouter.post('/:postId/comments', addCommentHandler);
+postRouter.delete('/:postId/resources/:resourceId', deleteResourceHandler);

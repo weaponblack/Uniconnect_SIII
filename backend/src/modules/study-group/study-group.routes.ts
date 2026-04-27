@@ -9,7 +9,11 @@ import {
     requestJoinHandler,
     getGroupRequestsHandler,
     respondToRequestHandler,
-    getDiscoverableStudyGroupsHandler
+    getDiscoverableStudyGroupsHandler,
+    requestTransferOwnershipHandler,
+    respondToTransferRequestHandler,
+    getPendingTransferHandler,
+    leaveGroupHandler
 } from './study-group.controller.js';
 import { requireAuth } from '../auth/auth.middleware.js';
 import { postRouter } from '../post/post.routes.js';
@@ -33,3 +37,9 @@ studyGroupRouter.delete('/:groupId', deleteStudyGroupHandler);
 studyGroupRouter.post('/:groupId/requests', requestJoinHandler);
 studyGroupRouter.get('/:groupId/requests', getGroupRequestsHandler);
 studyGroupRouter.put('/:groupId/requests/:requestId', respondToRequestHandler);
+
+// Transfer ownership & leave group
+studyGroupRouter.put('/:groupId/transfer-ownership', requestTransferOwnershipHandler);
+studyGroupRouter.get('/:groupId/transfer-pending', getPendingTransferHandler);
+studyGroupRouter.put('/transfer/:requestId/respond', respondToTransferRequestHandler);
+studyGroupRouter.delete('/:groupId/leave', leaveGroupHandler);
