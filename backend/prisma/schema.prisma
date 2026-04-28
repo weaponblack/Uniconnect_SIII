@@ -31,9 +31,6 @@ model User {
   organizedEvents Event[]             @relation("OrganizedEvents")
   groupRequests   StudyGroupRequest[] @relation("UserGroupRequests")
   notifications   Notification[]      @relation("UserNotifications")
-
-  transferRequestsSent     GroupTransferRequest[] @relation("TransferOwner")
-  transferRequestsReceived GroupTransferRequest[] @relation("TransferNewOwner")
 }
 
 model Subject {
@@ -89,7 +86,6 @@ model StudyGroup {
   members  User[]              @relation("GroupMembers")
   requests StudyGroupRequest[] @relation("GroupRequests")
   posts    Post[]              @relation("GroupPosts")
-  transferRequests GroupTransferRequest[] @relation("GroupTransfers")
 }
 
 model Post {
@@ -167,17 +163,4 @@ model Notification {
   createdAt DateTime @default(now())
 
   user User @relation("UserNotifications", fields: [userId], references: [id], onDelete: Cascade)
-}
-
-model GroupTransferRequest {
-  id          String   @id @default(cuid())
-  groupId     String
-  ownerId     String
-  newOwnerId  String
-  status      String   @default("PENDING") // PENDING, ACCEPTED, REJECTED
-  createdAt   DateTime @default(now())
-
-  group       StudyGroup @relation("GroupTransfers", fields: [groupId], references: [id], onDelete: Cascade)
-  owner       User       @relation("TransferOwner", fields: [ownerId], references: [id], onDelete: Cascade)
-  newOwner    User       @relation("TransferNewOwner", fields: [newOwnerId], references: [id], onDelete: Cascade)
 }

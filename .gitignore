@@ -18,3 +18,9 @@ implementation_plan_errors.md
 # OS
 .DS_Store
 Thumbs.db
+
+# Backend runtime uploads (user files, not source code)
+backend/uploads/
+
+# Large PDFs / docs not needed in builds
+*.pdf

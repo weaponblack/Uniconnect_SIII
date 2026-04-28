@@ -10,9 +10,7 @@ import {
     getGroupRequestsHandler,
     respondToRequestHandler,
     getDiscoverableStudyGroupsHandler,
-    requestTransferOwnershipHandler,
-    respondToTransferRequestHandler,
-    getPendingTransferHandler,
+    transferOwnershipHandler,
     leaveGroupHandler
 } from './study-group.controller.js';
 import { requireAuth } from '../auth/auth.middleware.js';
@@ -39,7 +37,5 @@ studyGroupRouter.get('/:groupId/requests', getGroupRequestsHandler);
 studyGroupRouter.put('/:groupId/requests/:requestId', respondToRequestHandler);
 
 // Transfer ownership & leave group
-studyGroupRouter.put('/:groupId/transfer-ownership', requestTransferOwnershipHandler);
-studyGroupRouter.get('/:groupId/transfer-pending', getPendingTransferHandler);
-studyGroupRouter.put('/transfer/:requestId/respond', respondToTransferRequestHandler);
+studyGroupRouter.put('/:groupId/transfer-ownership', transferOwnershipHandler);
 studyGroupRouter.delete('/:groupId/leave', leaveGroupHandler);

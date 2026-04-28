@@ -19,3 +19,8 @@ yarn-error.*
 .env
 .env.example
 .env.local
+# Runtime uploads - locked by OneDrive, not needed in build
+../backend/uploads/
+*.pdf
+# Local native android folder - managed by EAS remotely
+android/

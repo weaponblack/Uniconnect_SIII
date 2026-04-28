@@ -4,8 +4,7 @@ import {
     createStudyGroup, getStudentStudyGroups, updateStudyGroup,
     addMembersToGroup, deleteStudyGroup, removeMemberFromGroup,
     requestToJoinGroup, getGroupRequests, respondToGroupRequest,
-    getDiscoverableStudyGroups, requestTransferOwnership, leaveStudyGroup,
-    respondToTransferRequest, getPendingTransferForGroup
+    getDiscoverableStudyGroups, transferGroupOwnership, leaveStudyGroup
 } from './study-group.service.js';
 import { createStudyGroupSchema, updateStudyGroupSchema, addMembersSchema, respondToRequestSchema } from './study-group.schemas.js';
 import { catchAsync } from '../../lib/catch-async.js';
@@ -125,37 +124,15 @@ export async function respondToRequestHandler(req: Request, res: Response, next:
     }
 }
 
-export const requestTransferOwnershipHandler = catchAsync(async (req: Request, res: Response) => {
+export const transferOwnershipHandler = catchAsync(async (req: Request, res: Response) => {
     const userId = req.user!.sub;
     const groupId = req.params.groupId;
     const { newOwnerId } = req.body;
 
     if (!newOwnerId) throw new AppError(400, 'newOwnerId es requerido');
 
-    const updatedGroup = await requestTransferOwnership(userId, groupId, newOwnerId, req.user);
+    const updatedGroup = await transferGroupOwnership(userId, groupId, newOwnerId, req.user);
     res.json(updatedGroup);
-});
-
-export const respondToTransferRequestHandler = catchAsync(async (req: Request, res: Response) => {
-    const userId = req.user!.sub;
-    const { requestId } = req.params;
-    const { status } = req.body;
-
-    if (status !== 'ACCEPTED' && status !== 'REJECTED') {
-        throw new AppError(400, 'El status debe ser ACCEPTED o REJECTED');
-    }
-
-    const result = await respondToTransferRequest(userId, requestId, status, req.user);
-    res.json(result);
-});
-
-export const getPendingTransferHandler = catchAsync(async (req: Request, res: Response) => {
-    const userId = req.user!.sub;
-    const groupId = req.params.groupId;
-
-    const result = await getPendingTransferForGroup(userId, groupId, req.user);
-    // If no request, return 404 or null
-    res.json(result || null);
 });
 
 export const leaveGroupHandler = catchAsync(async (req: Request, res: Response) => {
