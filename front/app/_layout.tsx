@@ -8,7 +8,6 @@ import 'react-native-reanimated';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import { ToastProvider } from '@/components/Toast';
-import { NotificationProvider } from '@/components/NotificationProvider';
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -24,30 +23,28 @@ export default function RootLayout() {
   return (
     <ErrorBoundary>
       <ToastProvider>
-        <NotificationProvider>
-          <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-            <Stack
-              screenOptions={{
-                headerStyle: { backgroundColor: '#003e70' },
-                headerTintColor: '#fff',
-                headerTitleStyle: { fontWeight: 'bold' },
-                headerRight: () => (
-                  <Image
-                    source={require('../assets/images/LogoUC.png')}
-                    style={{ width: 36, height: 36, marginLeft: 12, marginRight: 12, borderRadius: 8 }}
-                  />
-                ),
-              }}
-            >
-              <Stack.Screen name="index" options={{ headerShown: false }} />
-              <Stack.Screen name="signup" options={{ title: 'Sign Up' }} />
-              <Stack.Screen name="dashboard" options={{ title: 'Dashboard' }} />
-              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-              <Stack.Screen name="profile-edit" options={{ title: 'Editar Perfil' }} />
-            </Stack>
-            <StatusBar style="auto" />
-          </ThemeProvider>
-        </NotificationProvider>
+        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+          <Stack
+            screenOptions={{
+              headerStyle: { backgroundColor: '#003e70' },
+              headerTintColor: '#fff',
+              headerTitleStyle: { fontWeight: 'bold' },
+              headerRight: () => (
+                <Image
+                  source={require('../assets/images/LogoUC.png')}
+                  style={{ width: 36, height: 36, marginLeft: 12, marginRight: 12, borderRadius: 8 }}
+                />
+              ),
+            }}
+          >
+            <Stack.Screen name="index" options={{ headerShown: false }} />
+            <Stack.Screen name="signup" options={{ title: 'Sign Up' }} />
+            <Stack.Screen name="dashboard" options={{ title: 'Dashboard' }} />
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen name="profile-edit" options={{ title: 'Editar Perfil' }} />
+          </Stack>
+          <StatusBar style="auto" />
+        </ThemeProvider>
       </ToastProvider>
     </ErrorBoundary>
   );

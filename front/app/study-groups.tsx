@@ -16,7 +16,6 @@ import {
     getGroupRequests,
     respondToGroupRequest,
     transferGroupOwnership,
-    getPendingTransfer,
     leaveStudyGroup,
     type StudyGroup,
     type StudyGroupMember,
@@ -63,19 +62,6 @@ export default function StudyGroupsScreen() {
     const [editInfoName, setEditInfoName] = useState('');
     const [editInfoDesc, setEditInfoDesc] = useState('');
     const [isUpdatingInfo, setIsUpdatingInfo] = useState(false);
-
-    // Transfer request state
-    const [pendingTransferReq, setPendingTransferReq] = useState<any>(null);
-
-    useEffect(() => {
-        if (session && editingGroup && isGroupOwner(session.user, editingGroup)) {
-             getPendingTransfer(editingGroup.id).then(req => {
-                 setPendingTransferReq(req);
-             }).catch(err => console.error(err));
-        } else {
-             setPendingTransferReq(null);
-        }
-    }, [editingGroup, session]);
 
     // Profile Modal State
     const [selectedMember, setSelectedMember] = useState<StudyGroupMember | null>(null);
@@ -306,11 +292,13 @@ export default function StudyGroupsScreen() {
 
         try {
             setIsLeavingGroup(true);
-            const req = await transferGroupOwnership(editingGroup.id, selectedNewOwner);
-            setPendingTransferReq(req);
+            await transferGroupOwnership(editingGroup.id, selectedNewOwner);
+            await leaveStudyGroup(editingGroup.id);
+            setGroups(groups.filter(g => g.id !== editingGroup.id));
+            setEditingGroup(null);
             setShowTransferModal(false);
             setSelectedNewOwner(null);
-            showToast('Has enviado la solicitud de transferencia', 'success');
+            showToast('Has transferido la administración y abandonado el grupo', 'success');
         } catch (error) {
             console.error('Transfer and leave error', error);
             showToast('Ocurrió un error al transferir o abandonar', 'error');
@@ -632,9 +620,9 @@ export default function StudyGroupsScreen() {
                 {session && isGroupOwner(session.user, editingGroup) ? (
                     <>
                         <Pressable
-                            style={[styles.deleteButton, (isDeleting || pendingTransferReq) && { opacity: 0.6 }]}
+                            style={[styles.deleteButton, isDeleting && { opacity: 0.6 }]}
                             onPress={handleDeleteGroup}
-                            disabled={isDeleting || isLeavingGroup || !!pendingTransferReq}
+                            disabled={isDeleting || isLeavingGroup}
                         >
                             <Text style={styles.deleteButtonText}>
                                 {isDeleting ? 'Eliminando...' : 'Eliminar Grupo'}
@@ -642,23 +630,15 @@ export default function StudyGroupsScreen() {
                         </Pressable>
 
                         {editingGroup.members.length > 1 && (
-                            pendingTransferReq ? (
-                                <View style={{ marginTop: 10, padding: 12, backgroundColor: '#fef3c7', borderRadius: 8 }}>
-                                    <Text style={{ color: '#d97706', textAlign: 'center', fontWeight: '500' }}>
-                                        Solicitud de delegación enviada a {pendingTransferReq.newOwner?.name || pendingTransferReq.newOwner?.email}. Debes esperar su respuesta para salir.
-                                    </Text>
-                                </View>
-                            ) : (
-                                <Pressable
-                                    style={[styles.deleteButton, { marginTop: 10, backgroundColor: '#f59e0b', borderColor: '#f59e0b' }, isLeavingGroup && { opacity: 0.6 }]}
-                                    onPress={() => setShowTransferModal(true)}
-                                    disabled={isDeleting || isLeavingGroup}
-                                >
-                                    <Text style={[styles.deleteButtonText, { color: '#fff' }]}>
-                                        {isLeavingGroup ? 'Procesando...' : 'Transferir Admón y Abandonar'}
-                                    </Text>
-                                </Pressable>
-                            )
+                            <Pressable
+                                style={[styles.deleteButton, { marginTop: 10, backgroundColor: '#f59e0b', borderColor: '#f59e0b' }, isLeavingGroup && { opacity: 0.6 }]}
+                                onPress={() => setShowTransferModal(true)}
+                                disabled={isDeleting || isLeavingGroup}
+                            >
+                                <Text style={[styles.deleteButtonText, { color: '#fff' }]}>
+                                    {isLeavingGroup ? 'Procesando...' : 'Transferir Admón y Abandonar'}
+                                </Text>
+                            </Pressable>
                         )}
                     </>
                 ) : (

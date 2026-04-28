@@ -21,7 +21,6 @@
     },
     "android": {
       "package": "com.ucaldas.estudiantes",
-      "usesCleartextTraffic": true,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
