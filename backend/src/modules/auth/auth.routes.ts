@@ -4,7 +4,7 @@ import { googleSignInHandler, googleMobileSignInHandler, simpleSignInHandler, lo
 export const authRouter = Router();
 
 authRouter.post('/google', googleSignInHandler);
-authRouter.post('/google/mobile', googleMobileSignInHandler);
+authRouter.post('/google/web', googleMobileSignInHandler);
 authRouter.post('/simple', simpleSignInHandler);
 authRouter.post('/refresh', refreshHandler);
 authRouter.post('/logout', logoutHandler);

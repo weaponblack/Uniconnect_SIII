@@ -1,0 +1,9 @@
+backend/
+node_modules/
+.git/
+*.pdf
+front/android/
+front/ios/
+front/node_modules/
+front/.expo/
+front/dist/
