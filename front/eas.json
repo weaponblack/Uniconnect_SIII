@@ -18,6 +18,7 @@
       "channel": "production"
     },
     "casa": {
+      "channel": "casa",
       "env": {
         "EXPO_PUBLIC_BACKEND_URL": "http://192.168.20.203:4000"
       },

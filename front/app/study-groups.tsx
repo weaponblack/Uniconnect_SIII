@@ -665,8 +665,8 @@ export default function StudyGroupsScreen() {
                         <View style={styles.modalContent}>
                             <Text style={styles.modalTitle}>Delegar Administración</Text>
                             <Text style={styles.subtitle}>Selecciona al nuevo administrador antes de abandonar el grupo.</Text>
-                            
-                            <ScrollView style={{maxHeight: 300, marginVertical: 10}}>
+
+                            <ScrollView style={{ maxHeight: 300, marginVertical: 10 }}>
                                 {editingGroup?.members.filter(m => m.id !== editingGroup.ownerId).map(member => (
                                     <Pressable
                                         key={member.id}
@@ -812,8 +812,8 @@ export default function StudyGroupsScreen() {
                     onRequestClose={() => setCreateModalVisible(false)}
                 >
                     <Pressable style={styles.modalOverlay} onPress={() => Keyboard.dismiss()}>
-                        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{width: '100%'}}>
-                            <Pressable style={styles.modalContent} onPress={() => {}}>
+                        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ width: '100%' }}>
+                            <Pressable style={styles.modalContent} onPress={() => { }}>
                                 <Text style={styles.modalTitle}>Crear nuevo grupo</Text>
 
                                 <Text style={styles.label}>Nombre del grupo</Text>

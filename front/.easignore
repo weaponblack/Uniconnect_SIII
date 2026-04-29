@@ -1,4 +1,4 @@
-backend
+../backend
 node_modules
 .expo
 dist
@@ -24,3 +24,6 @@ yarn-error.*
 *.pdf
 # Local native android folder - managed by EAS remotely
 android/
+**/android/
+**/ios/
+**/node_modules/
