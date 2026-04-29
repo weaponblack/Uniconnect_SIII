@@ -37,5 +37,4 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
         console.error('Token verification failed:', error);
         next(new AppError(401, 'Invalid or expired token'));
     }
-    }
 }

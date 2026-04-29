@@ -4,7 +4,7 @@ import {
     createStudyGroup, getStudentStudyGroups, updateStudyGroup,
     addMembersToGroup, deleteStudyGroup, removeMemberFromGroup,
     requestToJoinGroup, getGroupRequests, respondToGroupRequest,
-    getDiscoverableStudyGroups
+    getDiscoverableStudyGroups, transferGroupOwnership, leaveStudyGroup
 } from './study-group.service.js';
 import { createStudyGroupSchema, updateStudyGroupSchema, addMembersSchema, respondToRequestSchema } from './study-group.schemas.js';
 import { catchAsync } from '../../lib/catch-async.js';
@@ -171,6 +171,25 @@ export async function respondToRequestHandler(req: Request, res: Response, next:
         next(error);
     }
 }
+
+export const transferOwnershipHandler = catchAsync(async (req: Request, res: Response) => {
+    const userId = req.user!.sub;
+    const { groupId } = req.params;
+    const { newOwnerId } = req.body;
+
+    if (!newOwnerId) throw new AppError(400, 'Debe proporcionar el ID del nuevo administrador');
+
+    const result = await transferGroupOwnership(userId, groupId, newOwnerId, req.user);
+    res.json(result);
+});
+
+export const leaveGroupHandler = catchAsync(async (req: Request, res: Response) => {
+    const userId = req.user!.sub;
+    const { groupId } = req.params;
+
+    const result = await leaveStudyGroup(userId, groupId, req.user);
+    res.json(result);
+});
 
 // Using a getter to avoid circular dependencies if any, or just import them directly:
 import * as service from './study-group.service.js';

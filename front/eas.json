@@ -33,6 +33,15 @@
       "android": {
         "buildType": "apk"
       }
+    },
+    "universidad": {
+      "channel": "universidad",
+      "env": {
+        "EXPO_PUBLIC_BACKEND_URL": "http://192.168.140.30:4000"
+      },
+      "android": {
+        "buildType": "apk"
+      }
     }
   },
   "submit": {

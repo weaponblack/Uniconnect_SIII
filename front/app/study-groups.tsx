@@ -787,7 +787,7 @@ export default function StudyGroupsScreen() {
                                         </Pressable>
                                         <Pressable
                                             style={[styles.manageButton, { flex: 1 }]}
-                                            onPress={() => router.push(`/study-group/${group.id}?title=${encodeURIComponent(group.name)}&ownerId=${group.ownerId}` as any)}
+                                            onPress={() => router.push({ pathname: '/study-group-wall', params: { id: group.id, title: group.name, ownerId: group.ownerId } } as any)}
                                         >
                                             <Text style={styles.manageButtonText}>Ver Muro</Text>
                                         </Pressable>

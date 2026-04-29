@@ -46,16 +46,8 @@
         "expo-splash-screen",
         {
           "image": "./assets/images/splash-icon.png",
-          "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
-        }
-      ],
-      [
-        "react-native-auth0",
-        {
-          "domain": "dev-pk5s7tzyc17vqt54.us.auth0.com",
-          "customScheme": "com.nicojo.uniconnectg5.auth0"
         }
       ],
       "expo-web-browser"
