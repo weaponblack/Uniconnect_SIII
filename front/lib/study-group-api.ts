@@ -1,4 +1,5 @@
 import apiClient from './api-client';
+import { Platform } from 'react-native';
 
 export type StudyGroupMember = {
     id: string;
@@ -14,6 +15,16 @@ export type StudyGroupOwner = {
     email: string;
 };
 
+export type StudyGroupResource = {
+    id: string;
+    groupId: string;
+    uploaderId: string;
+    title: string;
+    type: 'PDF' | 'LINK';
+    url: string;
+    createdAt: string;
+};
+
 export type StudyGroup = {
     id: string;
     name: string;
@@ -21,6 +32,7 @@ export type StudyGroup = {
     ownerId: string;
     owner: StudyGroupOwner;
     members: StudyGroupMember[];
+    resources?: StudyGroupResource[];
     createdAt: string;
     updatedAt: string;
 };
@@ -54,9 +66,29 @@ export async function deleteStudyGroup(groupId: string): Promise<void> {
     await apiClient.delete(`/groups/${groupId}`);
 }
 
-export async function removeMemberFromStudyGroup(groupId: string, memberId: string): Promise<StudyGroup> {
-    const response = await apiClient.delete<StudyGroup>(`/groups/${groupId}/members/${memberId}`);
+export async function removeMemberFromStudyGroup(groupId: string, memberId: string, newOwnerId?: string): Promise<StudyGroup> {
+    const response = await apiClient.delete<StudyGroup>(`/groups/${groupId}/members/${memberId}`, {
+        data: { newOwnerId }
+    });
     return response.data;
+}
+
+export async function getStudyGroupResources(groupId: string): Promise<StudyGroupResource[]> {
+    const response = await apiClient.get<StudyGroupResource[]>(`/groups/${groupId}/resources`);
+    return response.data;
+}
+
+export async function addStudyGroupResource(groupId: string, formData: FormData): Promise<StudyGroupResource> {
+    const response = await apiClient.post<StudyGroupResource>(`/groups/${groupId}/resources`, formData, {
+        headers: {
+            'Content-Type': 'multipart/form-data',
+        }
+    });
+    return response.data;
+}
+
+export async function deleteStudyGroupResource(groupId: string, resourceId: string): Promise<void> {
+    await apiClient.delete(`/groups/${groupId}/resources/${resourceId}`);
 }
 
 // ==== STUDY GROUP REQUESTS OVER NETWORK ====

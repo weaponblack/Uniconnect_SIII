@@ -168,53 +168,33 @@ export async function signInWithGoogle(idToken: string, device: DeviceContext) {
   };
 }
 
-/**
- * Sign-in usando Google Access Token (para clientes móviles que no reciben idToken).
- * Verifica el token server-side vía el endpoint tokeninfo de Google.
- */
 export async function signInWithGoogleAccessToken(accessToken: string, device: DeviceContext) {
-  // Verificar el access token via tokeninfo de Google
-  const tokenInfoRes = await fetch(
-    `https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=${encodeURIComponent(accessToken)}`
-  );
-
+  // Verify access token via Google tokeninfo API
+  const tokenInfoRes = await fetch(`https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=${accessToken}`);
   if (!tokenInfoRes.ok) {
     throw new AppError(401, 'Invalid Google access token');
   }
-
-  const tokenInfo = await tokenInfoRes.json() as {
-    sub?: string;
-    email?: string;
-    email_verified?: string | boolean;
-    hd?: string;
-    error_description?: string;
-  };
-
-  if (tokenInfo.error_description || !tokenInfo.sub || !tokenInfo.email) {
-    throw new AppError(401, 'Invalid Google token payload');
+  const tokenInfo = await tokenInfoRes.json() as any;
+  if (!tokenInfo.sub || !tokenInfo.email) {
+    throw new AppError(401, 'Invalid Google token info');
   }
 
-  if (tokenInfo.email_verified !== true && tokenInfo.email_verified !== 'true') {
-    throw new AppError(401, 'Google email is not verified');
-  }
-
-  assertAllowedInstitutionalDomain(tokenInfo.email, tokenInfo.hd);
-
-  // Obtener perfil completo desde userinfo
-  const userInfoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+  // Get full user info from Google
+  const userInfoRes = await fetch('https://www.googleapis.com/userinfo/v2/me', {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
-  const userInfo = userInfoRes.ok
-    ? (await userInfoRes.json() as { name?: string; picture?: string })
-    : {};
+  const userInfo = userInfoRes.ok ? await userInfoRes.json() as any : {};
 
+  const email: string = tokenInfo.email;
+  const sub: string = tokenInfo.sub;
+  const name: string | null = userInfo.name || null;
+  const picture: string | null = userInfo.picture || null;
+
+  assertAllowedInstitutionalDomain(email);
+
+  // Find or create user (same logic as signInWithGoogle)
   const identity = await prisma.authIdentity.findUnique({
-    where: {
-      provider_providerUserId: {
-        provider: 'google',
-        providerUserId: tokenInfo.sub,
-      },
-    },
+    where: { provider_providerUserId: { provider: 'google', providerUserId: sub } },
     include: { user: true },
   });
 
@@ -222,47 +202,26 @@ export async function signInWithGoogleAccessToken(accessToken: string, device: D
   if (identity) {
     user = await prisma.user.update({
       where: { id: identity.userId },
-      data: {
-        email: tokenInfo.email,
-        name: userInfo.name ?? identity.user.name,
-        avatarUrl: userInfo.picture ?? identity.user.avatarUrl,
-      },
+      data: { email, name: name ?? identity.user.name, avatarUrl: picture ?? identity.user.avatarUrl },
     });
   } else {
-    const existingUserByEmail = await prisma.user.findUnique({
-      where: { email: tokenInfo.email },
-    });
-
-    if (existingUserByEmail) {
+    const existingByEmail = await prisma.user.findUnique({ where: { email } });
+    if (existingByEmail) {
       user = await prisma.user.update({
-        where: { id: existingUserByEmail.id },
+        where: { id: existingByEmail.id },
         data: {
-          name: userInfo.name ?? existingUserByEmail.name,
-          avatarUrl: userInfo.picture ?? existingUserByEmail.avatarUrl,
-          identities: {
-            create: {
-              provider: 'google',
-              providerUserId: tokenInfo.sub,
-              emailAtProvider: tokenInfo.email,
-              hostedDomain: tokenInfo.hd ?? null,
-            },
-          },
+          name: name ?? existingByEmail.name,
+          avatarUrl: picture ?? existingByEmail.avatarUrl,
+          identities: { create: { provider: 'google', providerUserId: sub, emailAtProvider: email, hostedDomain: null } },
         },
       });
     } else {
       user = await prisma.user.create({
         data: {
-          email: tokenInfo.email,
-          name: userInfo.name ?? null,
-          avatarUrl: userInfo.picture ?? null,
-          identities: {
-            create: {
-              provider: 'google',
-              providerUserId: tokenInfo.sub,
-              emailAtProvider: tokenInfo.email,
-              hostedDomain: tokenInfo.hd ?? null,
-            },
-          },
+          email,
+          name: name ?? null,
+          avatarUrl: picture ?? null,
+          identities: { create: { provider: 'google', providerUserId: sub, emailAtProvider: email, hostedDomain: null } },
         },
       });
     }
@@ -270,29 +229,17 @@ export async function signInWithGoogleAccessToken(accessToken: string, device: D
 
   const refreshData = buildRefreshToken();
   const expiresAt = new Date(Date.now() + env.REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000);
-
   const session = await prisma.session.create({
-    data: {
-      userId: user.id,
-      refreshTokenHash: refreshData.hash,
-      userAgent: device.userAgent,
-      ip: device.ip,
-      expiresAt,
-    },
+    data: { userId: user.id, refreshTokenHash: refreshData.hash, userAgent: device.userAgent, ip: device.ip, expiresAt },
   });
 
   return {
     accessToken: createAccessToken({ sub: user.id, email: user.email, role: user.role }),
     refreshToken: `${session.id}.${refreshData.tokenPart}`,
-    user: {
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      avatarUrl: user.avatarUrl,
-      role: user.role,
-    },
+    user: { id: user.id, email: user.email, name: user.name, avatarUrl: user.avatarUrl, role: user.role },
   };
 }
+
 
 export async function refreshSession(refreshToken: string, device: DeviceContext) {
   const [sessionId, tokenPart] = refreshToken.split('.');
