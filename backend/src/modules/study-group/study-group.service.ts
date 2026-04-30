@@ -3,6 +3,20 @@ import { AppError } from '../../errors/app-error.js';
 import { emitToUser } from '../../lib/socket.js';
 import type { CreateStudyGroupInput, UpdateStudyGroupInput, AddMembersInput, CreateResourceInput } from './study-group.schemas.js';
 
+export async function getStudyGroupById(groupId: string, userPayload?: any) {
+    const group = await prisma.studyGroup.findUnique({
+        where: { id: groupId },
+        include: {
+            owner: { select: { id: true, name: true, email: true } },
+            members: { select: { id: true, name: true, email: true, career: true, currentSemester: true } }
+        }
+    });
+
+    if (!group) throw new AppError(404, 'Grupo no encontrado');
+
+    return group;
+}
+
 export async function createStudyGroup(ownerId: string, data: CreateStudyGroupInput, payload?: any) {
     let dbOwnerId = ownerId;
     if (payload && payload.email) {

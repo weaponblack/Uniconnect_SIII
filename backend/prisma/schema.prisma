@@ -33,6 +33,8 @@ model User {
   notifications   Notification[]      @relation("UserNotifications")
   transfersSent   OwnershipTransferRequest[] @relation("TransfersSent")
   transfersReceived OwnershipTransferRequest[] @relation("TransfersReceived")
+  sentMessages      Message[] @relation("SentMessages")
+  receivedMessages  Message[] @relation("ReceivedMessages")
 }
 
 model Subject {
@@ -90,6 +92,7 @@ model StudyGroup {
   requests StudyGroupRequest[] @relation("GroupRequests")
   posts    Post[]              @relation("GroupPosts")
   ownershipTransfers OwnershipTransferRequest[]
+  messages Message[]           @relation("GroupMessages")
 }
 
 model StudyGroupResource {
@@ -198,3 +201,19 @@ model OwnershipTransferRequest {
   @@unique([groupId, toId]) // Only one pending transfer per user per group
 }
 
+model Message {
+  id         String   @id @default(cuid())
+  content    String
+  senderId   String
+  groupId    String?
+  receiverId String?
+  isPrivate  Boolean  @default(false)
+  fileUrl    String?
+  fileName   String?
+  fileType   String?
+  createdAt  DateTime @default(now())
+
+  sender    User        @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver  User?       @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+  group     StudyGroup? @relation("GroupMessages", fields: [groupId], references: [id], onDelete: Cascade)
+}

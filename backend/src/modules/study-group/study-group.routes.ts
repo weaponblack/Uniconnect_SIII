@@ -2,6 +2,7 @@ import { Router } from 'express';
 import {
     createStudyGroupHandler,
     getStudentStudyGroupsHandler,
+    getStudyGroupByIdHandler,
     updateStudyGroupHandler,
     addMembersToGroupHandler,
     deleteStudyGroupHandler,
@@ -37,6 +38,7 @@ studyGroupRouter.get('/transfers/pending', getPendingTransfersHandler);
 studyGroupRouter.post('/', createStudyGroupHandler);
 studyGroupRouter.get('/student/:studentId', getStudentStudyGroupsHandler);
 studyGroupRouter.get('/discover', getDiscoverableStudyGroupsHandler);
+studyGroupRouter.get('/:groupId', getStudyGroupByIdHandler);
 studyGroupRouter.put('/:groupId', updateStudyGroupHandler);
 studyGroupRouter.post('/:groupId/members', addMembersToGroupHandler);
 studyGroupRouter.delete('/:groupId/members/:memberId', removeMemberFromGroupHandler);

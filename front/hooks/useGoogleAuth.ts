@@ -8,7 +8,8 @@ import apiClient from '@/lib/api-client';
 
 WebBrowser.maybeCompleteAuthSession();
 
-const ALLOWED_DOMAIN = 'ucaldas.edu.co';
+//const ALLOWED_DOMAIN = 'ucaldas.edu.co';
+const ALLOWED_DOMAIN = 'gmail.com';
 
 export function useGoogleAuth() {
     const [user, setUser] = useState<any>(null);
@@ -78,12 +79,12 @@ export function useGoogleAuth() {
                 headers: { Authorization: `Bearer ${token}` },
             });
             const data = await res.json();
-
+            /*
             // Validar que sea cuenta @ucaldas.edu.co 
             if (!data.email?.endsWith(`@${ALLOWED_DOMAIN}`)) {
                 setError('Solo se permiten cuentas @ucaldas.edu.co');
                 return;
-            }
+            }*/
 
             // Sincronizar el token con el backend para guardar la sesión en la app
             try {
