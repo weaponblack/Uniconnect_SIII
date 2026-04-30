@@ -298,7 +298,6 @@ export default function StudyGroupsScreen() {
             if (editingGroup && data.groupId === editingGroup.id) {
                 setGroups(prev => prev.filter(g => g.id !== editingGroup.id));
                 setEditingGroup(null);
-                setShowEditModal(false);
                 setShowTransferModal(false);
                 setIsWaitingTransfer(false);
                 setIsLeavingGroup(false);
