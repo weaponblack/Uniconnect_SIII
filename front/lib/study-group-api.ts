@@ -136,3 +136,18 @@ export async function leaveStudyGroup(groupId: string): Promise<{ left?: boolean
     const response = await apiClient.delete<{ left?: boolean; deleted?: boolean }>(`/groups/${groupId}/leave`);
     return response.data;
 }
+
+export async function requestOwnershipTransfer(groupId: string, newOwnerId: string): Promise<any> {
+    const response = await apiClient.post(`/groups/${groupId}/transfer-request`, { newOwnerId });
+    return response.data;
+}
+
+export async function getPendingOwnershipTransfers(): Promise<any[]> {
+    const response = await apiClient.get('/groups/transfers/pending');
+    return response.data;
+}
+
+export async function respondToOwnershipTransfer(groupId: string, requestId: string, accept: boolean): Promise<any> {
+    const response = await apiClient.post(`/groups/${groupId}/transfer-response/${requestId}`, { accept });
+    return response.data;
+}

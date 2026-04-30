@@ -11,8 +11,12 @@ import { env } from './config/env.js';
 import { checkDbConnection, prisma } from './lib/prisma.js';
 import { AppError } from './errors/app-error.js';
 import { errorHandler } from './middlewares/error-handler.js';
+import { createServer } from 'http';
+import { initSocket } from './lib/socket.js';
 
 const app = express();
+const httpServer = createServer(app);
+const io = initSocket(httpServer);
 const port = env.PORT;
 
 const allowedOrigins = new Set([
@@ -84,7 +88,7 @@ async function bootstrap() {
     isDatabaseConnected = true;
     console.log('Database connection: OK');
 
-    app.listen(port, '0.0.0.0', () => {
+    httpServer.listen(port, '0.0.0.0', () => {
       console.log(`API running on http://0.0.0.0:${port}`);
       console.log(`API accessible on local network at http://<this-machine-ip>:${port}`);
     });

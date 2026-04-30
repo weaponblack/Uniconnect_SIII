@@ -17,12 +17,14 @@ import {
     respondToGroupRequest,
     transferGroupOwnership,
     leaveStudyGroup,
+    requestOwnershipTransfer,
     type StudyGroup,
     type StudyGroupMember,
     type StudyGroupRequest
 } from '@/lib/study-group-api';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/Colors';
+import { useNotifications } from '@/context/NotificationContext';
 
 export default function StudyGroupsScreen() {
     const { showToast } = useToast();
@@ -57,6 +59,8 @@ export default function StudyGroupsScreen() {
     const [showTransferModal, setShowTransferModal] = useState(false);
     const [selectedNewOwner, setSelectedNewOwner] = useState<string | null>(null);
     const [isLeavingGroup, setIsLeavingGroup] = useState(false);
+    const [isWaitingTransfer, setIsWaitingTransfer] = useState(false);
+    const { socket } = useNotifications();
 
     // Group info edit state
     const [editInfoName, setEditInfoName] = useState('');
@@ -287,23 +291,60 @@ export default function StudyGroupsScreen() {
         }
     };
 
+    useEffect(() => {
+        if (!socket || !editingGroup) return;
+
+        const onTransferAccepted = (data: any) => {
+            if (editingGroup && data.groupId === editingGroup.id) {
+                setGroups(prev => prev.filter(g => g.id !== editingGroup.id));
+                setEditingGroup(null);
+                setShowEditModal(false);
+                setShowTransferModal(false);
+                setIsWaitingTransfer(false);
+                setIsLeavingGroup(false);
+                showToast(`Has dejado el grupo "${data.groupName}" correctamente`, 'success');
+                
+                // Force navigation back to dashboard to ensure the user is "out"
+                router.replace('/dashboard');
+            }
+        };
+
+        const onTransferRejected = (data: any) => {
+            if (data.groupId === editingGroup.id) {
+                setIsWaitingTransfer(false);
+                setIsLeavingGroup(false);
+            }
+        };
+
+        socket.on('ownership-transfer-accepted', onTransferAccepted);
+        socket.on('ownership-transfer-rejected', onTransferRejected);
+
+        return () => {
+            socket.off('ownership-transfer-accepted', onTransferAccepted);
+            socket.off('ownership-transfer-rejected', onTransferRejected);
+        };
+    }, [socket, editingGroup]);
+
     const handleTransferAndLeave = async () => {
         if (!editingGroup || !selectedNewOwner) return;
 
         try {
             setIsLeavingGroup(true);
-            await transferGroupOwnership(editingGroup.id, selectedNewOwner);
-            await leaveStudyGroup(editingGroup.id);
-            setGroups(groups.filter(g => g.id !== editingGroup.id));
-            setEditingGroup(null);
+            setIsWaitingTransfer(true);
+            
+            // Phase 1: Request transfer
+            await requestOwnershipTransfer(editingGroup.id, selectedNewOwner);
+            
             setShowTransferModal(false);
             setSelectedNewOwner(null);
-            showToast('Has transferido la administración y abandonado el grupo', 'success');
+            
+            showToast('Invitación enviada. Esperando aceptación...', 'info');
+            // The actual exit will be handled by the socket listener
         } catch (error) {
             console.error('Transfer and leave error', error);
-            showToast('Ocurrió un error al transferir o abandonar', 'error');
-        } finally {
+            showToast('Ocurrió un error al enviar la invitación', 'error');
             setIsLeavingGroup(false);
+            setIsWaitingTransfer(false);
         }
     };
 
@@ -631,14 +672,23 @@ export default function StudyGroupsScreen() {
 
                         {editingGroup.members.length > 1 && (
                             <Pressable
-                                style={[styles.deleteButton, { marginTop: 10, backgroundColor: '#f59e0b', borderColor: '#f59e0b' }, isLeavingGroup && { opacity: 0.6 }]}
+                                style={[
+                                    styles.deleteButton, 
+                                    { marginTop: 10, backgroundColor: '#f59e0b', borderColor: '#f59e0b' }, 
+                                    (isLeavingGroup || isWaitingTransfer) && { opacity: 0.6 }
+                                ]}
                                 onPress={() => setShowTransferModal(true)}
-                                disabled={isDeleting || isLeavingGroup}
+                                disabled={isDeleting || isLeavingGroup || isWaitingTransfer}
                             >
                                 <Text style={[styles.deleteButtonText, { color: '#fff' }]}>
-                                    {isLeavingGroup ? 'Procesando...' : 'Transferir Admón y Abandonar'}
+                                    {isWaitingTransfer ? 'Esperando aceptación...' : 'Transferir Admón y Abandonar'}
                                 </Text>
                             </Pressable>
+                        )}
+                        {isWaitingTransfer && (
+                            <Text style={{ textAlign: 'center', marginTop: 10, color: '#f59e0b', fontStyle: 'italic' }}>
+                                Has solicitado transferir este grupo. Tu salida se procesará cuando el nuevo administrador acepte.
+                            </Text>
                         )}
                     </>
                 ) : (

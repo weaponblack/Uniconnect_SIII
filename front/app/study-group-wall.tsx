@@ -9,6 +9,7 @@ import { Colors } from '@/constants/Colors';
 import { loadSession, type SessionData } from '@/lib/session';
 import { useToast } from '@/components/Toast';
 import { authConfig } from '@/constants/AuthConfig';
+import { useNotifications } from '@/context/NotificationContext';
 
 export default function StudyGroupWall() {
   const { id, title, ownerId: groupOwnerId } = useLocalSearchParams<{ id: string, title?: string, ownerId?: string }>();
@@ -24,10 +25,30 @@ export default function StudyGroupWall() {
   const [files, setFiles] = useState<any[]>([]);
   const [isPosting, setIsPosting] = useState(false);
 
+  const { socket } = useNotifications();
+
   useEffect(() => {
     loadSession().then(setSession);
     loadPosts();
   }, [id]);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const onTransferAccepted = (data: any) => {
+      if (data.groupId === id) {
+        // We were kicked out of the group, redirect to dashboard
+        router.replace('/dashboard');
+        showToast(`Has dejado el grupo "${data.groupName}"`, 'info');
+      }
+    };
+
+    socket.on('ownership-transfer-accepted', onTransferAccepted);
+
+    return () => {
+      socket.off('ownership-transfer-accepted', onTransferAccepted);
+    };
+  }, [socket, id]);
 
   const loadPosts = async () => {
     try {

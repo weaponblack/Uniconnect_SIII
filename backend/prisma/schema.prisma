@@ -31,6 +31,8 @@ model User {
   organizedEvents Event[]             @relation("OrganizedEvents")
   groupRequests   StudyGroupRequest[] @relation("UserGroupRequests")
   notifications   Notification[]      @relation("UserNotifications")
+  transfersSent   OwnershipTransferRequest[] @relation("TransfersSent")
+  transfersReceived OwnershipTransferRequest[] @relation("TransfersReceived")
 }
 
 model Subject {
@@ -87,6 +89,7 @@ model StudyGroup {
   resources StudyGroupResource[]
   requests StudyGroupRequest[] @relation("GroupRequests")
   posts    Post[]              @relation("GroupPosts")
+  ownershipTransfers OwnershipTransferRequest[]
 }
 
 model StudyGroupResource {
@@ -178,3 +181,20 @@ model Notification {
 
   user User @relation("UserNotifications", fields: [userId], references: [id], onDelete: Cascade)
 }
+
+model OwnershipTransferRequest {
+  id        String   @id @default(cuid())
+  groupId   String
+  fromId    String
+  toId      String
+  status    String   @default("PENDING") // PENDING, ACCEPTED, REJECTED
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  group StudyGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  from  User       @relation("TransfersSent", fields: [fromId], references: [id], onDelete: Cascade)
+  to    User       @relation("TransfersReceived", fields: [toId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, toId]) // Only one pending transfer per user per group
+}
+

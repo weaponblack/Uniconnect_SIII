@@ -4,7 +4,8 @@ import {
     createStudyGroup, getStudentStudyGroups, updateStudyGroup,
     addMembersToGroup, deleteStudyGroup, removeMemberFromGroup,
     requestToJoinGroup, getGroupRequests, respondToGroupRequest,
-    getDiscoverableStudyGroups, transferGroupOwnership, leaveStudyGroup
+    getDiscoverableStudyGroups, transferGroupOwnership, leaveStudyGroup,
+    createOwnershipTransferRequest, getPendingOwnershipTransfers, respondToOwnershipTransferRequest
 } from './study-group.service.js';
 import { createStudyGroupSchema, updateStudyGroupSchema, addMembersSchema, respondToRequestSchema } from './study-group.schemas.js';
 import { catchAsync } from '../../lib/catch-async.js';
@@ -188,6 +189,34 @@ export const leaveGroupHandler = catchAsync(async (req: Request, res: Response) 
     const { groupId } = req.params;
 
     const result = await leaveStudyGroup(userId, groupId, req.user);
+    res.json(result);
+});
+
+export const createTransferRequestHandler = catchAsync(async (req: Request, res: Response) => {
+    const userId = req.user!.sub;
+    const { groupId } = req.params;
+    const { newOwnerId } = req.body;
+
+    if (!newOwnerId) throw new AppError(400, 'Debe proporcionar el ID del nuevo administrador');
+
+    const result = await createOwnershipTransferRequest(userId, groupId, newOwnerId, req.user);
+    res.status(201).json(result);
+});
+
+export const getPendingTransfersHandler = catchAsync(async (req: Request, res: Response) => {
+    const userId = req.user!.sub;
+    const result = await getPendingOwnershipTransfers(userId, req.user);
+    res.json(result);
+});
+
+export const respondToTransferRequestHandler = catchAsync(async (req: Request, res: Response) => {
+    const userId = req.user!.sub;
+    const { groupId, requestId } = req.params;
+    const { accept } = req.body;
+
+    if (accept === undefined) throw new AppError(400, 'Debe indicar si acepta o rechaza');
+
+    const result = await respondToOwnershipTransferRequest(userId, groupId, requestId, accept, req.user);
     res.json(result);
 });
 

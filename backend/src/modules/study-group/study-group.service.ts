@@ -1,5 +1,6 @@
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../errors/app-error.js';
+import { emitToUser } from '../../lib/socket.js';
 import type { CreateStudyGroupInput, UpdateStudyGroupInput, AddMembersInput, CreateResourceInput } from './study-group.schemas.js';
 
 export async function createStudyGroup(ownerId: string, data: CreateStudyGroupInput, payload?: any) {
@@ -544,4 +545,130 @@ export async function leaveStudyGroup(userId: string, groupId: string, payload?:
     });
 
     return { left: true };
+}
+
+// ============== NEW: OWNERSHIP TRANSFER FLOW ==============
+
+export async function createOwnershipTransferRequest(ownerId: string, groupId: string, newOwnerId: string, payload?: any) {
+    let dbOwnerId = ownerId;
+    if (payload && payload.email) {
+        const existing = await prisma.user.findUnique({ where: { email: payload.email }, select: { id: true } });
+        if (existing) dbOwnerId = existing.id;
+    }
+
+    const group = await prisma.studyGroup.findUnique({
+        where: { id: groupId },
+        include: { owner: true }
+    });
+
+    if (!group) throw new AppError(404, 'Grupo de estudio no encontrado');
+    if (group.ownerId !== dbOwnerId) throw new AppError(403, 'Solo el administrador puede transferir la administración');
+
+    const isMember = await prisma.user.findFirst({
+        where: { id: newOwnerId, memberOfGroups: { some: { id: groupId } } }
+    });
+    if (!isMember) throw new AppError(400, 'El nuevo administrador debe ser miembro del grupo');
+
+    // Create or Update request
+    const request = await (prisma as any).ownershipTransferRequest.upsert({
+        where: {
+            groupId_toId: {
+                groupId,
+                toId: newOwnerId
+            }
+        },
+        update: { status: 'PENDING', fromId: dbOwnerId },
+        create: {
+            groupId,
+            fromId: dbOwnerId,
+            toId: newOwnerId,
+            status: 'PENDING'
+        }
+    });
+
+    // Notify the candidate
+    emitToUser(newOwnerId, 'ownership-transfer-requested', {
+        id: request.id,
+        groupId: group.id,
+        groupName: group.name,
+        fromName: group.owner.name || group.owner.email
+    });
+
+    return request;
+}
+
+export async function getPendingOwnershipTransfers(userId: string, payload?: any) {
+    let dbUserId = userId;
+    if (payload && payload.email) {
+        const existing = await prisma.user.findUnique({ where: { email: payload.email }, select: { id: true } });
+        if (existing) dbUserId = existing.id;
+    }
+
+    return (prisma as any).ownershipTransferRequest.findMany({
+        where: { toId: dbUserId, status: 'PENDING' },
+        include: {
+            group: { select: { id: true, name: true } },
+            from: { select: { id: true, name: true } }
+        }
+    });
+}
+
+export async function respondToOwnershipTransferRequest(userId: string, groupId: string, requestId: string, accept: boolean, payload?: any) {
+    let dbUserId = userId;
+    if (payload && payload.email) {
+        const existing = await prisma.user.findUnique({ where: { email: payload.email }, select: { id: true } });
+        if (existing) dbUserId = existing.id;
+    }
+
+    const request = await (prisma as any).ownershipTransferRequest.findUnique({
+        where: { id: requestId },
+        include: { group: true }
+    });
+
+    if (!request || request.groupId !== groupId || request.toId !== dbUserId) {
+        throw new AppError(404, 'Solicitud no encontrada');
+    }
+
+    if (!accept) {
+        await (prisma as any).ownershipTransferRequest.update({
+            where: { id: requestId },
+            data: { status: 'REJECTED' }
+        });
+
+        // Notify the owner that it was rejected
+        emitToUser(request.fromId, 'ownership-transfer-rejected', {
+            groupId: request.groupId,
+            message: 'El miembro ha rechazado la invitación de administración'
+        });
+
+        return { status: 'REJECTED' };
+    }
+
+    // ACCEPTED logic:
+    // 1. Update group owner
+    // 2. Remove old owner from group (as per requirements)
+    // 3. Update request status
+    // 4. Notify old owner to let them leave
+
+    await prisma.$transaction([
+        prisma.studyGroup.update({
+            where: { id: request.groupId },
+            data: { 
+                ownerId: dbUserId,
+                members: { disconnect: { id: request.fromId } }
+            }
+        }),
+        (prisma as any).ownershipTransferRequest.update({
+            where: { id: requestId },
+            data: { status: 'ACCEPTED' }
+        })
+    ]);
+
+    // Notify old owner that transfer is complete and they are out
+    emitToUser(request.fromId, 'ownership-transfer-accepted', {
+        groupId: request.groupId,
+        groupName: request.group.name
+    });
+
+    return { status: 'ACCEPTED' };
 }
