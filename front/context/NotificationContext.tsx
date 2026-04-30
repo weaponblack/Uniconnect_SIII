@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
+import { router } from 'expo-router';
 import { authConfig } from '@/constants/AuthConfig';
 import { loadSession } from '@/lib/session';
 import { useToast } from '@/components/Toast';
@@ -89,6 +90,17 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
             newSocket.on('ownership-transfer-rejected', (data) => {
                 showToast(data.message, 'error');
+            });
+
+            newSocket.on('new-notification', (data) => {
+                // When a new chat or system notification arrives, show a toast
+                showToast(data.message, 'info', () => {
+                    if (data.groupId) {
+                        router.push({ pathname: '/study-group-chat', params: { id: data.groupId, title: data.groupName }});
+                    } else if (data.senderId) {
+                        router.push({ pathname: '/private-chat', params: { id: data.senderId, name: data.senderName }});
+                    }
+                });
             });
 
             setSocket(newSocket);

@@ -7,19 +7,20 @@ interface ToastMessage {
   id: string;
   message: string;
   type: ToastType;
+  onPress?: () => void;
 }
 
 interface ToastContextType {
-  showToast: (message: string, type?: ToastType) => void;
+  showToast: (message: string, type?: ToastType, onPress?: () => void) => void;
 }
 
 const ToastContext = createContext<ToastContextType | undefined>(undefined);
 
-let globalToast: ((message: string, type?: ToastType) => void) | null = null;
+let globalToast: ((message: string, type?: ToastType, onPress?: () => void) => void) | null = null;
 
-export const showToast = (message: string, type: ToastType = 'info') => {
+export const showToast = (message: string, type: ToastType = 'info', onPress?: () => void) => {
   if (globalToast) {
-    globalToast(message, type);
+    globalToast(message, type, onPress);
   } else {
     console.warn('ToastProvider not initialized');
   }
@@ -36,9 +37,9 @@ export const useToast = () => {
 export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
-  const _showToast = useCallback((message: string, type: ToastType = 'info') => {
+  const _showToast = useCallback((message: string, type: ToastType = 'info', onPress?: () => void) => {
     const id = Date.now().toString();
-    setToasts((prev) => [...prev, { id, message, type }]);
+    setToasts((prev) => [...prev, { id, message, type, onPress }]);
   }, []);
 
   useEffect(() => {
@@ -106,6 +107,13 @@ const ToastItem: React.FC<{ toast: ToastMessage; onRemove: () => void }> = ({ to
     });
   };
 
+  const handlePress = () => {
+    if (toast.onPress) {
+      toast.onPress();
+    }
+    hide();
+  };
+
   const backgroundColor = 
     toast.type === 'success' ? '#10b981' : 
     toast.type === 'error' ? '#ef4444' : 
@@ -122,7 +130,7 @@ const ToastItem: React.FC<{ toast: ToastMessage; onRemove: () => void }> = ({ to
         },
       ]}
     >
-      <Pressable onPress={hide}>
+      <Pressable onPress={handlePress}>
         <Text style={styles.text}>{toast.message}</Text>
       </Pressable>
     </Animated.View>

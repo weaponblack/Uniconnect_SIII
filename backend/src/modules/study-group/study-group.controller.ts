@@ -27,6 +27,12 @@ export async function getStudentStudyGroupsHandler(req: Request, res: Response, 
     }
 }
 
+export const getStudyGroupByIdHandler = catchAsync(async (req: Request, res: Response) => {
+    const { groupId } = req.params;
+    const group = await getService().getStudyGroupById(groupId, req.user);
+    res.json(group);
+});
+
 export async function getDiscoverableStudyGroupsHandler(req: Request, res: Response, next: NextFunction) {
     try {
         const payload = req.user;

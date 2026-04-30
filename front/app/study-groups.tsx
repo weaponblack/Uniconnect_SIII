@@ -476,12 +476,29 @@ export default function StudyGroupsScreen() {
                         </View>
                     )}
 
-                    <Pressable
-                        style={[styles.modalButton, styles.cancelModalButton, { marginTop: 20 }]}
-                        onPress={() => setSelectedMember(null)}
-                    >
-                        <Text style={styles.cancelModalButtonText}>Cerrar</Text>
-                    </Pressable>
+                    <View style={{ flexDirection: 'row', gap: 10, marginTop: 20 }}>
+                        <Pressable
+                            style={[styles.modalButton, styles.cancelModalButton]}
+                            onPress={() => setSelectedMember(null)}
+                        >
+                            <Text style={styles.cancelModalButtonText}>Cerrar</Text>
+                        </Pressable>
+                        {session?.user?.id !== selectedMember?.id && (
+                            <Pressable
+                                style={[styles.modalButton, { backgroundColor: '#1d4ed8' }]}
+                                onPress={() => {
+                                    const memberId = selectedMember?.id;
+                                    const memberName = selectedMember?.name;
+                                    setSelectedMember(null);
+                                    if (memberId) {
+                                        router.push({ pathname: '/private-chat', params: { id: memberId, name: memberName } } as any);
+                                    }
+                                }}
+                            >
+                                <Text style={{ color: '#fff', fontWeight: 'bold' }}>Mensaje Privado</Text>
+                            </Pressable>
+                        )}
+                    </View>
                 </View>
             </View>
         </Modal>
@@ -839,6 +856,12 @@ export default function StudyGroupsScreen() {
                                             onPress={() => router.push({ pathname: '/study-group-wall', params: { id: group.id, title: group.name, ownerId: group.ownerId } } as any)}
                                         >
                                             <Text style={styles.manageButtonText}>Ver Muro</Text>
+                                        </Pressable>
+                                        <Pressable
+                                            style={[styles.manageButton, { flex: 1, backgroundColor: '#dbeafe' }]}
+                                            onPress={() => router.push({ pathname: '/study-group-chat', params: { id: group.id, title: group.name } } as any)}
+                                        >
+                                            <Text style={[styles.manageButtonText, { color: '#1d4ed8' }]}>Chat</Text>
                                         </Pressable>
                                     </View>
                                 )}

@@ -79,6 +79,9 @@ app.use('/auth', authRouter);
 app.use('/student', studentRouter);
 app.use('/groups', studyGroupRouter);
 
+import { chatRouter } from './modules/chat/chat.routes.js';
+app.use('/chat', chatRouter);
+
 // Global Error Handler
 app.use(errorHandler);
 

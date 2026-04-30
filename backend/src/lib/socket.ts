@@ -19,6 +19,16 @@ export function initSocket(server: HttpServer) {
             console.log(`User ${userId} joined their room`);
         });
 
+        socket.on('join-group', (groupId: string) => {
+            socket.join(`group-${groupId}`);
+            console.log(`User ${socket.id} joined group ${groupId}`);
+        });
+
+        socket.on('leave-group', (groupId: string) => {
+            socket.leave(`group-${groupId}`);
+            console.log(`User ${socket.id} left group ${groupId}`);
+        });
+
         socket.on('disconnect', () => {
             console.log('Client disconnected:', socket.id);
         });
