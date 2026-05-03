@@ -63,6 +63,26 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
                 newSocket?.emit('join-user', session.user.id);
             });
 
+            newSocket.on('study-group-request-rejected', (data) => {
+                showToast(
+                    `Tu solicitud para el grupo "${data.groupName}" fue rechazada`,
+                    'error',
+                    () => {
+                        router.push({ pathname: '/study-groups' });
+                    }
+                );
+            });
+
+            newSocket.on('study-group-request-accepted', (data) => {
+                showToast(
+                    `¡Te aceptaron en el grupo "${data.groupName}"!`,
+                    'success',
+                    () => {
+                        router.push({ pathname: '/study-group-chat', params: { id: data.groupId, title: data.groupName }});
+                    }
+                );
+            });
+
             newSocket.on('ownership-transfer-requested', (data) => {
                 showToast(`Nueva invitación de administración: ${data.groupName}`, 'info');
                 refreshTransfers();

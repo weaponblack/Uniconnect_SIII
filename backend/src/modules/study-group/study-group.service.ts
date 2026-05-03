@@ -403,11 +403,10 @@ export async function requestToJoinGroup(studentId: string, groupId: string, pay
         if (existingRequest.status === 'PENDING') {
             throw new AppError(400, 'Ya has enviado una solicitud a este grupo');
         }
-        // If it was rejected or somehow else, we can decide to update it to pending again, 
-        // but let's just create/upsert it.
+        // If it was rejected, allow resending it by updating to PENDING
     }
 
-    // Create the request
+    // Create or update the request (upsert with status PENDING)
     return prisma.studyGroupRequest.upsert({
         where: {
             groupId_userId: {
@@ -454,7 +453,8 @@ export async function respondToGroupRequest(ownerId: string, groupId: string, re
     }
 
     const group = await prisma.studyGroup.findUnique({
-        where: { id: groupId }
+        where: { id: groupId },
+        include: { owner: { select: { id: true, name: true } } }
     });
 
     if (!group) throw new AppError(404, 'Grupo de estudio no encontrado');
@@ -490,6 +490,26 @@ export async function respondToGroupRequest(ownerId: string, groupId: string, re
                 type: 'REQUEST_ACCEPTED',
                 message: `¡Tu solicitud para unirte al grupo '${group.name}' ha sido aceptada!`
             }
+        });
+
+        emitToUser(request.userId, 'study-group-request-accepted', {
+            groupId: group.id,
+            groupName: group.name
+        });
+    } else if (status === 'REJECTED') {
+        // Create a notification for the rejected user
+        await prisma.notification.create({
+            data: {
+                userId: request.userId,
+                type: 'REQUEST_REJECTED',
+                message: `Tu solicitud para unirte al grupo '${group.name}' ha sido rechazada`
+            }
+        });
+
+        emitToUser(request.userId, 'study-group-request-rejected', {
+            groupId: group.id,
+            groupName: group.name,
+            requesterName: group.owner.name
         });
     }
 
