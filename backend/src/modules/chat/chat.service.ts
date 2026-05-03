@@ -1,6 +1,7 @@
 import { prisma } from '../../lib/prisma.js';
 import { getIO, emitToUser } from '../../lib/socket.js';
 import { AppError } from '../../errors/app-error.js';
+import { decorateMessage } from './decorators/message.decorator.js';
 
 export class ChatService {
   async getGroupMessages(groupId: string, userId: string) {
@@ -46,9 +47,13 @@ export class ChatService {
     const isMember = group.members.some((m) => m.id === senderId) || group.ownerId === senderId;
     if (!isMember) throw new AppError(403, 'No perteneces a este grupo');
 
+    // Apply decorators to the content using the helper
+    const memberNames = group.members.map(m => m.name || '').filter(Boolean);
+    const processedContent = decorateMessage(content, { memberNames });
+
     const message = await prisma.message.create({
       data: {
-        content,
+        content: processedContent,
         senderId,
         groupId,
         isPrivate: false,
@@ -126,9 +131,11 @@ export class ChatService {
   }) {
     const { senderId, receiverId, content, fileUrl, fileName, fileType } = data;
 
+    const processedContent = decorateMessage(content);
+
     const message = await prisma.message.create({
       data: {
-        content,
+        content: processedContent,
         senderId,
         receiverId,
         isPrivate: true,
