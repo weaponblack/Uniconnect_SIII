@@ -122,6 +122,11 @@ export async function respondToGroupRequest(groupId: string, requestId: string, 
     return response.data;
 }
 
+export async function resendGroupRequest(groupId: string): Promise<StudyGroupRequest> {
+    const response = await apiClient.post<StudyGroupRequest>(`/groups/${groupId}/requests`);
+    return response.data;
+}
+
 export async function getStudyGroupById(groupId: string): Promise<StudyGroup> {
     const response = await apiClient.get<StudyGroup>(`/groups/${groupId}`);
     return response.data;

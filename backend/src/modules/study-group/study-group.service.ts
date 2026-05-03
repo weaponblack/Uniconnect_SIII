@@ -2,6 +2,7 @@ import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../errors/app-error.js';
 import { emitToUser } from '../../lib/socket.js';
 import type { CreateStudyGroupInput, UpdateStudyGroupInput, AddMembersInput, CreateResourceInput } from './study-group.schemas.js';
+import { studyGroupSubject } from './observers/index.js';
 
 export async function getStudyGroupById(groupId: string, userPayload?: any) {
     const group = await prisma.studyGroup.findUnique({
@@ -39,7 +40,7 @@ export async function createStudyGroup(ownerId: string, data: CreateStudyGroupIn
         }
     }
 
-    return prisma.studyGroup.create({
+    const group = await prisma.studyGroup.create({
         data: {
             ...data,
             ownerId: dbOwnerId,
@@ -52,6 +53,14 @@ export async function createStudyGroup(ownerId: string, data: CreateStudyGroupIn
             members: { select: { id: true, name: true, email: true, career: true, currentSemester: true } },
         }
     });
+
+    studyGroupSubject.notify('GROUP_CREATED', {
+        ownerId: dbOwnerId,
+        groupId: group.id,
+        groupName: group.name
+    });
+
+    return group;
 }
 
 export async function getStudentStudyGroups(studentId: string, payload?: any) {
@@ -315,7 +324,7 @@ export async function addStudyGroupResource(groupId: string, uploaderId: string,
 
     if (!group) throw new AppError(403, 'Debes ser miembro del grupo para añadir recursos');
 
-    return prisma.studyGroupResource.create({
+    const resource = await prisma.studyGroupResource.create({
         data: {
             groupId,
             uploaderId: dbUploaderId,
@@ -324,6 +333,14 @@ export async function addStudyGroupResource(groupId: string, uploaderId: string,
             url: data.url || ''
         }
     });
+
+    studyGroupSubject.notify('RESOURCE_ADDED', {
+        groupId,
+        uploaderId: dbUploaderId,
+        title: data.title
+    });
+
+    return resource;
 }
 
 export async function deleteStudyGroupResource(groupId: string, resourceId: string, userId: string, payload?: any) {
@@ -403,11 +420,10 @@ export async function requestToJoinGroup(studentId: string, groupId: string, pay
         if (existingRequest.status === 'PENDING') {
             throw new AppError(400, 'Ya has enviado una solicitud a este grupo');
         }
-        // If it was rejected or somehow else, we can decide to update it to pending again, 
-        // but let's just create/upsert it.
+        // If it was rejected, allow resending it by updating to PENDING
     }
 
-    // Create the request
+    // Create or update the request (upsert with status PENDING)
     return prisma.studyGroupRequest.upsert({
         where: {
             groupId_userId: {
@@ -454,7 +470,8 @@ export async function respondToGroupRequest(ownerId: string, groupId: string, re
     }
 
     const group = await prisma.studyGroup.findUnique({
-        where: { id: groupId }
+        where: { id: groupId },
+        include: { owner: { select: { id: true, name: true } } }
     });
 
     if (!group) throw new AppError(404, 'Grupo de estudio no encontrado');
@@ -483,13 +500,17 @@ export async function respondToGroupRequest(ownerId: string, groupId: string, re
             }
         });
 
-        // Create a notification for the accepted user
-        await prisma.notification.create({
-            data: {
-                userId: request.userId,
-                type: 'REQUEST_ACCEPTED',
-                message: `¡Tu solicitud para unirte al grupo '${group.name}' ha sido aceptada!`
-            }
+        studyGroupSubject.notify('JOIN_REQUEST_ACCEPTED', {
+            userId: request.userId,
+            groupId: group.id,
+            groupName: group.name
+        });
+    } else if (status === 'REJECTED') {
+        studyGroupSubject.notify('JOIN_REQUEST_REJECTED', {
+            userId: request.userId,
+            groupId: group.id,
+            groupName: group.name,
+            ownerName: group.owner.name
         });
     }
 
@@ -678,8 +699,9 @@ export async function respondToOwnershipTransferRequest(userId: string, groupId:
         })
     ]);
 
-    // Notify old owner that transfer is complete and they are out
-    emitToUser(request.fromId, 'ownership-transfer-accepted', {
+    // Notify via observer
+    studyGroupSubject.notify('OWNERSHIP_TRANSFERRED', {
+        fromId: request.fromId,
         groupId: request.groupId,
         groupName: request.group.name
     });
